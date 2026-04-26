@@ -1,0 +1,45 @@
+# dependencies
+node_modules/
+
+# Expo / React Native
+.expo/
+.expo-shared/
+web-build/
+dist/
+*.expo.tsbuildinfo
+
+# Metro / bundler
+.metro-health-check*
+
+# native build outputs
+android/
+ios/
+*.keystore
+*.p8
+*.p12
+*.mobileprovision
+
+# logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.log
+
+# tests / coverage
+coverage/
+
+# env files
+.env
+.env.*
+!.env.example
+
+# TypeScript
+*.tsbuildinfo
+
+# macOS
+.DS_Store
+
+# editor
+.vscode/
+.idea/
