@@ -1,0 +1,100 @@
+{
+  "properties": [
+    {
+      "id": "prop-001",
+      "name": "Shanti Girls Hostel",
+      "address": "HSR Layout, Bengaluru",
+      "totalBeds": 72,
+      "occupiedBeds": 64,
+      "caretaker": "Anita Sharma",
+      "active": true
+    },
+    {
+      "id": "prop-002",
+      "name": "Metro Boys Residency",
+      "address": "Whitefield, Bengaluru",
+      "totalBeds": 96,
+      "occupiedBeds": 85,
+      "caretaker": "Rahul Verma",
+      "active": true
+    }
+  ],
+  "tenants": [
+    {
+      "id": "ten-001",
+      "fullName": "Aarohi Mehta",
+      "propertyId": "prop-001",
+      "roomNumber": "G-104",
+      "monthlyRent": 9500,
+      "dueAmount": 0,
+      "status": "active",
+      "kycVerified": true
+    },
+    {
+      "id": "ten-002",
+      "fullName": "Neha Kulkarni",
+      "propertyId": "prop-001",
+      "roomNumber": "G-118",
+      "monthlyRent": 9800,
+      "dueAmount": 9800,
+      "status": "active",
+      "kycVerified": true
+    },
+    {
+      "id": "ten-003",
+      "fullName": "Rohan Iyer",
+      "propertyId": "prop-002",
+      "roomNumber": "B-206",
+      "monthlyRent": 8600,
+      "dueAmount": 4300,
+      "status": "active",
+      "kycVerified": false
+    }
+  ],
+  "payments": [
+    {
+      "id": "pay-001",
+      "tenantId": "ten-001",
+      "amount": 9500,
+      "dueMonth": "2026-04",
+      "paidOn": "2026-04-05",
+      "mode": "UPI",
+      "utr": "UTR308771"
+    }
+  ],
+  "maintenanceRequests": [
+    {
+      "id": "mnt-001",
+      "propertyId": "prop-001",
+      "tenantId": "ten-002",
+      "roomNumber": "G-118",
+      "title": "Bathroom tap leakage",
+      "priority": "medium",
+      "status": "open",
+      "serviceProvider": "Sri Plumbing Works",
+      "estimatedCost": 600
+    }
+  ],
+  "expenses": [
+    {
+      "id": "exp-001",
+      "propertyId": "prop-001",
+      "category": "Electricity",
+      "amount": 38200,
+      "paidBy": "Anita Sharma",
+      "paidTo": "BESCOM",
+      "spentOn": "2026-04-09"
+    }
+  ],
+  "documents": [
+    {
+      "id": "doc-001",
+      "entityType": "tenant",
+      "entityId": "ten-001",
+      "title": "Aarohi Lease Agreement",
+      "fileType": "pdf",
+      "uploadedOn": "2025-07-01",
+      "tags": ["lease", "kyc"]
+    }
+  ]
+}

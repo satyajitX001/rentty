@@ -1,0 +1,24 @@
+{
+  "expo": {
+    "name": "RentOk",
+    "slug": "rentok-app",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#0B3DFF"
+    },
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#0B3DFF"
+      }
+    },
+    "web": {
+      "bundler": "metro"
+    }
+  }
+}
