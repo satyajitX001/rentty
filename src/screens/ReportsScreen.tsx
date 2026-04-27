@@ -1,44 +1,55 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { Screen } from "../components/Screen";
-import { mockApi } from "../services/mockApi";
+import { reportCards } from "../data/reportCards";
+import { getDocuments } from "../services/api/documentService";
+import { getExpenses } from "../services/api/expenseService";
+import { queryKeys } from "../services/api/queryKeys";
+import { generateReport } from "../services/api/reportService";
 import { colors, fonts, radii, shadows } from "../theme/tokens";
-import { DocumentItem, Expense, Lead, ReportCard } from "../types/models";
+
+function getCurrentMonthRange() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth();
+  const firstDay = new Date(Date.UTC(year, month, 1)).toISOString().slice(0, 10);
+  const lastDay = new Date(Date.UTC(year, month + 1, 0)).toISOString().slice(0, 10);
+  const monthKey = `${year}-${String(month + 1).padStart(2, "0")}`;
+  return { firstDay, lastDay, monthKey };
+}
 
 export function ReportsScreen() {
-  const [loading, setLoading] = useState(true);
-  const [reports, setReports] = useState<ReportCard[]>([]);
-  const [docs, setDocs] = useState<DocumentItem[]>([]);
-  const [expenses, setExpenses] = useState<Expense[]>([]);
-  const [leads, setLeads] = useState<Lead[]>([]);
-  const [downloadText, setDownloadText] = useState("No report download yet.");
+  const { firstDay, lastDay, monthKey } = useMemo(() => getCurrentMonthRange(), []);
   const { width } = useWindowDimensions();
+  const [downloadText, setDownloadText] = useState("No report download yet.");
+  const [activeReportId, setActiveReportId] = useState<string | null>(null);
 
-  useEffect(() => {
-    async function loadData() {
-      const [reportData, docsData, expenseData, leadData] = await Promise.all([
-        mockApi.getReportCards(),
-        mockApi.getDocuments(),
-        mockApi.getExpenses(),
-        mockApi.getLeads()
-      ]);
-      setReports(reportData);
-      setDocs(docsData);
-      setExpenses(expenseData);
-      setLeads(leadData);
-      setLoading(false);
+  const documentsQuery = useQuery({ queryKey: queryKeys.documents.list, queryFn: () => getDocuments() });
+  const expensesQuery = useQuery({ queryKey: [...queryKeys.expenses.list, monthKey], queryFn: () => getExpenses(monthKey) });
+
+  const reportMutation = useMutation({
+    mutationFn: generateReport,
+    onSuccess: (result) => {
+      if (result.downloadUrl) {
+        setDownloadText(`Report ready: ${result.downloadUrl}`);
+        return;
+      }
+
+      setDownloadText(`${result.fileName ?? "Report"} generated successfully.`);
+    },
+    onError: (error) => {
+      const message = error instanceof Error ? error.message : "Unable to generate report.";
+      setDownloadText(message);
+    },
+    onSettled: () => {
+      setActiveReportId(null);
     }
+  });
 
-    loadData();
-  }, []);
-
+  const loading = documentsQuery.isPending || expensesQuery.isPending;
   const reportWidth = useMemo(() => (width >= 420 ? "48%" : "100%"), [width]);
-
-  const onDownload = async (reportId: string) => {
-    const result = await mockApi.downloadReport(reportId);
-    setDownloadText(`${result.fileName} is ${result.status}`);
-  };
 
   if (loading) {
     return (
@@ -48,6 +59,20 @@ export function ReportsScreen() {
     );
   }
 
+  if (documentsQuery.isError || expensesQuery.isError) {
+    return (
+      <Screen title="Reports and Documents" subtitle="Accounting and excel exports">
+        <View style={styles.sectionCard}>
+          <Text style={styles.sectionTitle}>Unable to load reports data</Text>
+          <Text style={styles.itemMeta}>Please check API server and retry.</Text>
+        </View>
+      </Screen>
+    );
+  }
+
+  const docs = documentsQuery.data ?? [];
+  const expenses = expensesQuery.data ?? [];
+
   return (
     <Screen title="Reports and Documents" subtitle="Accounting | Excel Reports | Centralized records">
       <LinearGradient colors={["#3A7BFF", "#133CA6"]} style={styles.hero}>
@@ -56,22 +81,42 @@ export function ReportsScreen() {
       </LinearGradient>
 
       <View style={styles.reportGrid}>
-        {reports.map((report) => (
-          <View key={report.id} style={[styles.reportCard, { width: reportWidth }]}>
-            <View style={styles.reportHeader}>
-              <Text style={[styles.reportTitle, { color: report.accent }]}>{report.title}</Text>
-              <Text style={styles.reportIcon}>{report.icon}</Text>
+        {reportCards.map((report) => {
+          const buttonLoading = reportMutation.isPending && activeReportId === report.id;
+
+          return (
+            <View key={report.id} style={[styles.reportCard, { width: reportWidth }]}>
+              <View style={styles.reportHeader}>
+                <Text style={[styles.reportTitle, { color: report.accent }]}>{report.title}</Text>
+                <Text style={styles.reportIcon}>{report.icon}</Text>
+              </View>
+              {report.points.map((point) => (
+                <Text key={point} style={styles.reportPoint}>
+                  - {point}
+                </Text>
+              ))}
+              <Pressable
+                style={[styles.downloadButton, { borderColor: report.accent }]}
+                onPress={() => {
+                  setActiveReportId(report.id);
+                  reportMutation.mutate({
+                    reportType: report.reportType,
+                    from: firstDay,
+                    to: lastDay,
+                    format: "xlsx"
+                  });
+                }}
+                disabled={buttonLoading}
+              >
+                {buttonLoading ? (
+                  <ActivityIndicator color={report.accent} size="small" />
+                ) : (
+                  <Text style={[styles.downloadText, { color: report.accent }]}>Download Report</Text>
+                )}
+              </Pressable>
             </View>
-            {report.points.map((point) => (
-              <Text key={point} style={styles.reportPoint}>
-                - {point}
-              </Text>
-            ))}
-            <Pressable style={[styles.downloadButton, { borderColor: report.accent }]} onPress={() => onDownload(report.id)}>
-              <Text style={[styles.downloadText, { color: report.accent }]}>Download Report</Text>
-            </Pressable>
-          </View>
-        ))}
+          );
+        })}
       </View>
 
       <View style={styles.sectionCard}>
@@ -100,19 +145,6 @@ export function ReportsScreen() {
               </Text>
             </View>
             <Text style={styles.amount}>INR {expense.amount.toLocaleString("en-IN")}</Text>
-          </View>
-        ))}
-      </View>
-
-      <View style={styles.sectionCard}>
-        <Text style={styles.sectionTitle}>Lead Funnel</Text>
-        {leads.map((lead) => (
-          <View key={lead.id} style={styles.row}>
-            <View style={styles.flexOne}>
-              <Text style={styles.itemTitle}>{lead.name}</Text>
-              <Text style={styles.itemMeta}>{lead.requirements}</Text>
-            </View>
-            <Text style={styles.itemTag}>{lead.status.replace("_", " ")}</Text>
           </View>
         ))}
       </View>
@@ -177,7 +209,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: radii.button,
     paddingVertical: 8,
-    alignItems: "center"
+    alignItems: "center",
+    minHeight: 40,
+    justifyContent: "center"
   },
   downloadText: {
     fontFamily: fonts.heading,

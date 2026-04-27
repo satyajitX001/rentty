@@ -1,40 +1,59 @@
-import React, { useEffect, useState } from "react";
-import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
+import React from "react";
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
+import { useQuery } from "@tanstack/react-query";
 import { InfoCard } from "../components/InfoCard";
 import { Pill } from "../components/Pill";
 import { Screen } from "../components/Screen";
-import { mockApi } from "../services/mockApi";
+import { getDashboardSummary } from "../services/api/dashboardService";
+import { getHealth } from "../services/api/healthService";
+import { getNotifications } from "../services/api/notificationService";
+import { getProperties } from "../services/api/propertyService";
+import { queryKeys } from "../services/api/queryKeys";
+import { getSupportTickets } from "../services/api/supportService";
+import { useAuth } from "../store/AuthContext";
+import { API_BASE_URL } from "../services/api/config";
 import { colors, fonts } from "../theme/tokens";
-import { AlertItem, DashboardSummary, Property, SupportTicket } from "../types/models";
+import { DashboardSummary } from "../types/models";
 
 const currency = (value: number) => `INR ${value.toLocaleString("en-IN")}`;
 
+const emptySummary: DashboardSummary = {
+  totalProperties: 0,
+  occupiedBeds: 0,
+  totalBeds: 0,
+  activeTenants: 0,
+  pendingDues: 0,
+  monthCollection: 0,
+  openMaintenance: 0,
+  monthExpenses: 0
+};
+
+function getErrorMessage(error: unknown) {
+  if (error instanceof Error) return error.message;
+  return "Unable to load data.";
+}
+
 export function DashboardScreen() {
-  const [loading, setLoading] = useState(true);
-  const [summary, setSummary] = useState<DashboardSummary | null>(null);
-  const [properties, setProperties] = useState<Property[]>([]);
-  const [alerts, setAlerts] = useState<AlertItem[]>([]);
-  const [tickets, setTickets] = useState<SupportTicket[]>([]);
+  const { user, signOut } = useAuth();
+  const summaryQuery = useQuery({ queryKey: queryKeys.dashboard.summary, queryFn: getDashboardSummary });
+  const propertiesQuery = useQuery({ queryKey: queryKeys.properties.list, queryFn: getProperties });
+  const alertsQuery = useQuery({ queryKey: queryKeys.notifications.list, queryFn: getNotifications });
+  const ticketsQuery = useQuery({ queryKey: queryKeys.support.tickets, queryFn: getSupportTickets });
+  const healthQuery = useQuery({ queryKey: queryKeys.health, queryFn: getHealth });
 
-  useEffect(() => {
-    async function loadData() {
-      const [dashboardData, propertyData, alertData, ticketData] = await Promise.all([
-        mockApi.getDashboard(),
-        mockApi.getProperties(),
-        mockApi.getAlerts(),
-        mockApi.getSupportTickets()
-      ]);
-      setSummary(dashboardData);
-      setProperties(propertyData);
-      setAlerts(alertData);
-      setTickets(ticketData);
-      setLoading(false);
-    }
+  const loading = summaryQuery.isPending || propertiesQuery.isPending || alertsQuery.isPending || ticketsQuery.isPending;
+  const summary = summaryQuery.data ?? emptySummary;
+  const properties = propertiesQuery.data ?? [];
+  const alerts = alertsQuery.data ?? [];
+  const tickets = ticketsQuery.data ?? [];
 
-    loadData();
-  }, []);
+  const healthStatus = (healthQuery.data?.status ?? "unknown").toString().toUpperCase();
+  const healthTone = healthStatus === "OK" || healthStatus === "HEALTHY" ? "success" : "warning";
 
-  if (loading || !summary) {
+  const firstError =
+    summaryQuery.error ?? propertiesQuery.error ?? alertsQuery.error ?? ticketsQuery.error ?? healthQuery.error ?? null;
+
+  if (loading) {
     return (
       <Screen title="RentOk Dashboard" subtitle="Hostel operations at a glance">
         <ActivityIndicator color={colors.primary} />
@@ -44,6 +63,28 @@ export function DashboardScreen() {
 
   return (
     <Screen title="RentOk Dashboard" subtitle="Simple daily control for caretaker and owner">
+      {firstError ? (
+        <InfoCard title="Network Notice">
+          <Text style={styles.warningText}>{getErrorMessage(firstError)}</Text>
+        </InfoCard>
+      ) : null}
+
+      <InfoCard title="Server Health" rightNode={<Pill label={healthStatus} tone={healthTone} />}>
+        <Text style={styles.muted}>Base URL: {API_BASE_URL}</Text>
+      </InfoCard>
+
+      <InfoCard title="Session">
+        <View style={styles.rowSpread}>
+          <View style={styles.flexOne}>
+            <Text style={styles.bold}>{user?.name ?? "Authenticated User"}</Text>
+            <Text style={styles.muted}>Role: {(user?.role ?? "caretaker").toUpperCase()}</Text>
+          </View>
+          <Pressable style={styles.signOutButton} onPress={signOut}>
+            <Text style={styles.signOutText}>Sign Out</Text>
+          </Pressable>
+        </View>
+      </InfoCard>
+
       <View style={styles.grid}>
         <InfoCard title="Properties" value={`${summary.totalProperties}`} style={styles.metricCard} />
         <InfoCard title="Occupancy" value={`${summary.occupiedBeds}/${summary.totalBeds}`} style={styles.metricCard} />
@@ -202,5 +243,23 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.textMuted,
     fontFamily: fonts.body
+  },
+  warningText: {
+    color: colors.warning,
+    fontSize: 13,
+    fontFamily: fonts.heading
+  },
+  signOutButton: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 12
+  },
+  signOutText: {
+    color: colors.primaryDark,
+    fontFamily: fonts.heading,
+    fontSize: 12
   }
 });

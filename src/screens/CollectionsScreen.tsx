@@ -1,30 +1,41 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useMemo } from "react";
 import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from "react-native";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { InfoCard } from "../components/InfoCard";
 import { Pill } from "../components/Pill";
 import { Screen } from "../components/Screen";
-import { mockApi } from "../services/mockApi";
+import { collectRent, getPayments } from "../services/api/collectionService";
+import { queryKeys } from "../services/api/queryKeys";
+import { getTenants } from "../services/api/tenantService";
 import { colors, fonts, radii } from "../theme/tokens";
-import { Payment, Tenant } from "../types/models";
 
 const money = (value: number) => `INR ${value.toLocaleString("en-IN")}`;
 
 export function CollectionsScreen() {
-  const [loading, setLoading] = useState(true);
-  const [tenants, setTenants] = useState<Tenant[]>([]);
-  const [payments, setPayments] = useState<Payment[]>([]);
-  const [collecting, setCollecting] = useState(false);
+  const queryClient = useQueryClient();
+  const tenantsQuery = useQuery({ queryKey: queryKeys.tenants.list, queryFn: getTenants });
+  const paymentsQuery = useQuery({ queryKey: queryKeys.collections.payments, queryFn: () => getPayments() });
 
-  useEffect(() => {
-    async function loadData() {
-      const [tenantData, paymentData] = await Promise.all([mockApi.getTenants(), mockApi.getPayments()]);
-      setTenants([...tenantData]);
-      setPayments([...paymentData]);
-      setLoading(false);
+  const collectMutation = useMutation({
+    mutationFn: collectRent,
+    onSuccess: async (result) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.tenants.list }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.collections.payments }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.summary })
+      ]);
+      Alert.alert("Receipt generated", `Receipt ${result.receipt.receiptNo}\nBalance: ${money(result.receipt.balanceDue)}`);
+    },
+    onError: (error) => {
+      const message = error instanceof Error ? error.message : "Something went wrong";
+      Alert.alert("Collection failed", message);
     }
+  });
 
-    loadData();
-  }, []);
+  const loading = tenantsQuery.isPending || paymentsQuery.isPending;
+
+  const tenants = tenantsQuery.data ?? [];
+  const payments = paymentsQuery.data ?? [];
 
   const pendingTenants = useMemo(() => tenants.filter((tenant) => tenant.dueAmount > 0), [tenants]);
 
@@ -37,26 +48,13 @@ export function CollectionsScreen() {
     const target = pendingTenants[0];
     const amount = Math.min(target.dueAmount, target.monthlyRent);
 
-    try {
-      setCollecting(true);
-      const result = await mockApi.collectRent({
-        tenantId: target.id,
-        amount,
-        mode: "UPI",
-        paidOn: new Date().toISOString().slice(0, 10),
-        notes: "Auto-collected from demo action"
-      });
-
-      const [tenantData, paymentData] = await Promise.all([mockApi.getTenants(), mockApi.getPayments()]);
-      setTenants([...tenantData]);
-      setPayments([...paymentData]);
-      Alert.alert("Receipt generated", `Receipt ${result.receipt.receiptNo}\nBalance: ${money(result.receipt.balanceDue)}`);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Something went wrong";
-      Alert.alert("Collection failed", message);
-    } finally {
-      setCollecting(false);
-    }
+    await collectMutation.mutateAsync({
+      tenantId: target.id,
+      amount,
+      mode: "UPI",
+      paidOn: new Date().toISOString().slice(0, 10),
+      notes: "Collected via mobile app"
+    });
   };
 
   if (loading) {
@@ -67,12 +65,30 @@ export function CollectionsScreen() {
     );
   }
 
+  if (tenantsQuery.isError || paymentsQuery.isError) {
+    return (
+      <Screen title="Rent Collection" subtitle="Payments, reminders and receipts">
+        <InfoCard title="Unable to load collections">
+          <Text style={styles.meta}>Please check API server and retry.</Text>
+        </InfoCard>
+      </Screen>
+    );
+  }
+
   return (
     <Screen title="Rent Collection" subtitle="Fast collection flow with receipt generation">
       <InfoCard title="Pending Dues" value={money(pendingTenants.reduce((sum, item) => sum + item.dueAmount, 0))}>
         <Text style={styles.meta}>Tenants with pending dues: {pendingTenants.length}</Text>
-        <Pressable style={[styles.button, collecting && styles.buttonDisabled]} onPress={collectFirstDue} disabled={collecting}>
-          <Text style={styles.buttonLabel}>{collecting ? "Collecting..." : "Collect Next Pending Due"}</Text>
+        <Pressable
+          style={[styles.button, collectMutation.isPending && styles.buttonDisabled]}
+          onPress={collectFirstDue}
+          disabled={collectMutation.isPending}
+        >
+          {collectMutation.isPending ? (
+            <ActivityIndicator color="#FFFFFF" size="small" />
+          ) : (
+            <Text style={styles.buttonLabel}>Collect Next Pending Due</Text>
+          )}
         </Pressable>
       </InfoCard>
 
@@ -134,10 +150,12 @@ const styles = StyleSheet.create({
     paddingVertical: 11,
     paddingHorizontal: 14,
     alignItems: "center",
-    marginTop: 8
+    marginTop: 8,
+    minHeight: 44,
+    justifyContent: "center"
   },
   buttonDisabled: {
-    opacity: 0.6
+    opacity: 0.7
   },
   buttonLabel: {
     color: "#FFFFFF",
