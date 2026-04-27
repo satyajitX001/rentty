@@ -3,8 +3,8 @@ import { httpClient } from "./httpClient";
 
 const fallbackSummary: DashboardSummary = {
   totalProperties: 0,
-  occupiedBeds: 0,
-  totalBeds: 0,
+  occupiedProperties: 0,
+  availableProperties: 0,
   activeTenants: 0,
   pendingDues: 0,
   monthCollection: 0,

@@ -179,8 +179,7 @@ apiClient.interceptors.request.use((config) => {
     headers.Authorization = `Bearer ${token}`;
   }
 
-  config.headers = headers;
-  // console.info(`[API AUTH] ${token ? `Authorization header attached: Bearer ${token}` : "No access token in store"}`);
+  config.headers = headers as any;
   logCurlRequest(config, headers);
 
   return config;
@@ -229,7 +228,7 @@ apiClient.interceptors.response.use(
         originalRequest.headers = {
           ...normalizeHeaders(originalRequest.headers),
           Authorization: `Bearer ${tokens.accessToken}`
-        };
+        } as any;
 
         return apiClient(originalRequest);
       } catch (refreshError) {
@@ -240,7 +239,9 @@ apiClient.interceptors.response.use(
         await clearSessionStorage();
         notifyAuthFailure();
 
-        return Promise.reject(new ApiError(refreshMessage, refreshAxiosError.response?.status ?? 401, refreshAxiosError.response?.data));
+        return Promise.reject(
+          new ApiError(refreshMessage, refreshAxiosError.response?.status ?? 401, refreshAxiosError.response?.data)
+        );
       } finally {
         refreshPromise = null;
       }
@@ -278,6 +279,23 @@ export const httpClient = {
       method: "PATCH",
       url: pathOrUrl,
       data: body,
+      params: query
+    });
+  },
+
+  put<T>(pathOrUrl: string, body?: unknown, query?: QueryParams) {
+    return request<T>({
+      method: "PUT",
+      url: pathOrUrl,
+      data: body,
+      params: query
+    });
+  },
+
+  delete<T>(pathOrUrl: string, query?: QueryParams) {
+    return request<T>({
+      method: "DELETE",
+      url: pathOrUrl,
       params: query
     });
   }

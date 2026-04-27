@@ -2,25 +2,35 @@ export type Property = {
   id: string;
   name: string;
   address: string;
-  totalBeds: number;
-  occupiedBeds: number;
-  caretaker: string;
+  caretaker?: string;
+  caretakerPhone?: string;
+  occupancyStatus?: "available" | "occupied";
   active: boolean;
+  totalBeds?: number;
+  occupiedBeds?: number;
 };
 
 export type Tenant = {
   id: string;
   fullName: string;
+  fullAddress?: string;
   phone: string;
-  email: string;
+  email?: string;
   propertyId: string;
-  roomNumber: string;
-  leaseStart: string;
-  leaseEnd: string;
+  roomNumber?: string;
   monthlyRent: number;
+  rentDueDay?: number;
+  joinedOn?: string;
+  advanceAmount?: number;
+  openingDueAmount?: number;
   dueAmount: number;
-  status: "active" | "notice" | "vacated";
+  status: "active" | "notice" | "vacated" | "inactive";
   kycVerified: boolean;
+  leaseStart?: string;
+  leaseEnd?: string;
+  vacatedOn?: string;
+  vacateReason?: string;
+  active?: boolean;
 };
 
 export type Payment = {
@@ -29,10 +39,12 @@ export type Payment = {
   propertyId: string;
   amount: number;
   dueMonth: string;
+  paidMonth?: string;
   paidOn: string;
-  mode: "UPI" | "Bank Transfer" | "Cash";
-  utr: string;
-  notes: string;
+  mode: "UPI" | "CASH" | "BANK_TRANSFER" | "CARD";
+  utr?: string;
+  notes?: string;
+  receiptNo?: string;
 };
 
 export type MaintenanceRequest = {
@@ -108,11 +120,13 @@ export type ReportCard = {
 
 export type DashboardSummary = {
   totalProperties: number;
-  occupiedBeds: number;
-  totalBeds: number;
+  occupiedProperties?: number;
+  availableProperties?: number;
   activeTenants: number;
   pendingDues: number;
   monthCollection: number;
   openMaintenance: number;
   monthExpenses: number;
+  occupiedBeds?: number;
+  totalBeds?: number;
 };

@@ -111,7 +111,7 @@ export const payments: Payment[] = [
     amount: 9100,
     dueMonth: "2026-04",
     paidOn: "2026-04-02",
-    mode: "Bank Transfer",
+    mode: "BANK_TRANSFER",
     utr: "UTR982214",
     notes: "Advance payment"
   },
@@ -122,7 +122,7 @@ export const payments: Payment[] = [
     amount: 4300,
     dueMonth: "2026-04",
     paidOn: "2026-04-18",
-    mode: "Cash",
+    mode: "CASH",
     utr: "CASH-APR-22",
     notes: "Partially settled"
   }
@@ -346,11 +346,14 @@ export const reportCards: ReportCard[] = [
 
 export const dashboardSummary: DashboardSummary = {
   totalProperties: properties.length,
-  occupiedBeds: properties.reduce((sum, p) => sum + p.occupiedBeds, 0),
-  totalBeds: properties.reduce((sum, p) => sum + p.totalBeds, 0),
+  occupiedBeds: properties.reduce((sum, p) => sum + (p.occupiedBeds ?? 0), 0),
+  totalBeds: properties.reduce((sum, p) => sum + (p.totalBeds ?? 0), 0),
   activeTenants: tenants.filter((t) => t.status === "active").length,
   pendingDues: tenants.reduce((sum, t) => sum + t.dueAmount, 0),
   monthCollection: payments.reduce((sum, p) => sum + p.amount, 0),
   openMaintenance: maintenanceRequests.filter((m) => m.status !== "resolved").length,
   monthExpenses: expenses.reduce((sum, e) => sum + e.amount, 0)
 };
+
+
+

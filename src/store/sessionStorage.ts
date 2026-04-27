@@ -1,9 +1,10 @@
 import * as SecureStore from "expo-secure-store";
+import { UserRole } from "../services/api/authService";
 
 type StoredUser = {
   id: string;
   name: string;
-  role: string;
+  role: UserRole;
 };
 
 const SESSION_KEY = "rentok_auth_session_v1";

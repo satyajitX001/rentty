@@ -2,7 +2,87 @@ import { Property } from "../../types/models";
 import { httpClient } from "./httpClient";
 import { toArray } from "./normalizers";
 
+export type CreatePropertyPayload = {
+  name: string;
+  address: string;
+};
+
+export type UpdatePropertyPayload = Partial<CreatePropertyPayload>;
+
+export type AssignCaretakerPayload = {
+  caretaker?: string;
+  caretakerPhone: string;
+};
+
+export type AssignCaretakerResult = {
+  property: Property;
+  onboarding?: {
+    accountCreated: boolean;
+    phone: string;
+    tempPassword?: string;
+  };
+};
+
+function normalizeProperty(input: unknown): Property {
+  const raw = (input ?? {}) as Record<string, unknown>;
+  const status = raw.occupancyStatus;
+
+  return {
+    id: String(raw.id ?? raw._id ?? ""),
+    name: String(raw.name ?? ""),
+    address: String(raw.address ?? ""),
+    caretaker: raw.caretaker ? String(raw.caretaker) : undefined,
+    caretakerPhone: raw.caretakerPhone ? String(raw.caretakerPhone) : undefined,
+    occupancyStatus: status === "occupied" ? "occupied" : "available",
+    active: raw.active !== false
+  };
+}
+
 export async function getProperties() {
   const data = await httpClient.get<unknown>("/properties");
-  return toArray<Property>(data, ["properties", "items", "data"]);
+  return toArray<unknown>(data, ["properties", "items", "data"]).map(normalizeProperty);
+}
+
+export async function createProperty(payload: CreatePropertyPayload) {
+  const data = await httpClient.post<unknown>("/properties", payload);
+
+  if (typeof data === "object" && data !== null && "property" in data) {
+    return normalizeProperty((data as Record<string, unknown>).property);
+  }
+
+  return normalizeProperty(data);
+}
+
+export async function assignCaretaker(propertyId: string, payload: AssignCaretakerPayload): Promise<AssignCaretakerResult> {
+  const data = await httpClient.patch<unknown>(`/properties/${propertyId}/caretaker`, payload);
+
+  if (typeof data === "object" && data !== null && "property" in data) {
+    const raw = data as Record<string, unknown>;
+    const onboardingRaw = raw.onboarding as Record<string, unknown> | undefined;
+
+    return {
+      property: normalizeProperty(raw.property),
+      onboarding: onboardingRaw
+        ? {
+            accountCreated: Boolean(onboardingRaw.accountCreated),
+            phone: String(onboardingRaw.phone ?? ""),
+            tempPassword: onboardingRaw.tempPassword ? String(onboardingRaw.tempPassword) : undefined
+          }
+        : undefined
+    };
+  }
+
+  return {
+    property: normalizeProperty(data)
+  };
+}
+
+export async function updateProperty(propertyId: string, payload: UpdatePropertyPayload) {
+  const data = await httpClient.put<unknown>(`/properties/${propertyId}`, payload);
+
+  if (typeof data === "object" && data !== null && "property" in data) {
+    return normalizeProperty((data as Record<string, unknown>).property);
+  }
+
+  return normalizeProperty(data);
 }

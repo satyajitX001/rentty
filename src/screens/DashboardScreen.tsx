@@ -1,31 +1,45 @@
-import React from "react";
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
-import { useQuery } from "@tanstack/react-query";
+import React, { useMemo, useState } from "react";
+import {
+  ActivityIndicator,
+  Alert,
+  Modal,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { InfoCard } from "../components/InfoCard";
 import { Pill } from "../components/Pill";
 import { Screen } from "../components/Screen";
 import { getDashboardSummary } from "../services/api/dashboardService";
-import { getHealth } from "../services/api/healthService";
 import { getNotifications } from "../services/api/notificationService";
-import { getProperties } from "../services/api/propertyService";
+import {
+  assignCaretaker,
+  createProperty,
+  getProperties,
+  updateProperty,
+} from "../services/api/propertyService";
 import { queryKeys } from "../services/api/queryKeys";
 import { getSupportTickets } from "../services/api/supportService";
+import { createTenant, getTenants } from "../services/api/tenantService";
 import { useAuth } from "../store/AuthContext";
-import { API_BASE_URL } from "../services/api/config";
-import { colors, fonts } from "../theme/tokens";
-import { DashboardSummary } from "../types/models";
+import { colors, fonts, radii } from "../theme/tokens";
+import { DashboardSummary, Property } from "../types/models";
 
 const currency = (value: number) => `INR ${value.toLocaleString("en-IN")}`;
 
 const emptySummary: DashboardSummary = {
   totalProperties: 0,
-  occupiedBeds: 0,
-  totalBeds: 0,
+  occupiedProperties: 0,
+  availableProperties: 0,
   activeTenants: 0,
   pendingDues: 0,
   monthCollection: 0,
   openMaintenance: 0,
-  monthExpenses: 0
+  monthExpenses: 0,
 };
 
 function getErrorMessage(error: unknown) {
@@ -33,233 +47,783 @@ function getErrorMessage(error: unknown) {
   return "Unable to load data.";
 }
 
+function formatDate(value?: string) {
+  return value ? value.slice(0, 10) : "-";
+}
+
+function initials(name?: string) {
+  if (!name) return "RO";
+  return name
+    .split(" ")
+    .map((part) => part[0] ?? "")
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+}
+
 export function DashboardScreen() {
   const { user, signOut } = useAuth();
+  const queryClient = useQueryClient();
   const summaryQuery = useQuery({ queryKey: queryKeys.dashboard.summary, queryFn: getDashboardSummary });
   const propertiesQuery = useQuery({ queryKey: queryKeys.properties.list, queryFn: getProperties });
   const alertsQuery = useQuery({ queryKey: queryKeys.notifications.list, queryFn: getNotifications });
   const ticketsQuery = useQuery({ queryKey: queryKeys.support.tickets, queryFn: getSupportTickets });
-  const healthQuery = useQuery({ queryKey: queryKeys.health, queryFn: getHealth });
 
-  const loading = summaryQuery.isPending || propertiesQuery.isPending || alertsQuery.isPending || ticketsQuery.isPending;
+  const [selectedProperty, setSelectedProperty] = useState<Property | null>(null);
+  const [propertyModalMode, setPropertyModalMode] = useState<"create" | "edit" | null>(null);
+  const [isPropertyDetailVisible, setIsPropertyDetailVisible] = useState(false);
+  const [isTenantModalVisible, setIsTenantModalVisible] = useState(false);
+  const [isCaretakerModalVisible, setIsCaretakerModalVisible] = useState(false);
+
+  const propertyHistoryQuery = useQuery({
+    queryKey: [...queryKeys.tenants.list, "history", selectedProperty?.id ?? "none"],
+    queryFn: () => getTenants({ propertyId: selectedProperty?.id, includeInactive: true }),
+    enabled: Boolean(selectedProperty?.id),
+  });
+
+  const [propertyName, setPropertyName] = useState("");
+  const [propertyAddress, setPropertyAddress] = useState("");
+
+  const [tenantName, setTenantName] = useState("");
+  const [tenantAddress, setTenantAddress] = useState("");
+  const [tenantPhone, setTenantPhone] = useState("");
+  const [tenantRent, setTenantRent] = useState("");
+  const [tenantRentDay, setTenantRentDay] = useState("");
+  const [tenantJoinedOn, setTenantJoinedOn] = useState("");
+  const [tenantAdvance, setTenantAdvance] = useState("");
+  const [tenantOpeningDue, setTenantOpeningDue] = useState("");
+
+  const [caretakerName, setCaretakerName] = useState("");
+  const [caretakerPhone, setCaretakerPhone] = useState("");
+
+  const invalidateOperationalQueries = async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: queryKeys.properties.list }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.tenants.list }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.summary }),
+    ]);
+  };
+
+  const createPropertyMutation = useMutation({
+    mutationFn: createProperty,
+    onSuccess: async () => {
+      setPropertyModalMode(null);
+      setPropertyName("");
+      setPropertyAddress("");
+      await invalidateOperationalQueries();
+    },
+  });
+
+  const updatePropertyMutation = useMutation({
+    mutationFn: ({ propertyId, payload }: { propertyId: string; payload: { name: string; address: string } }) =>
+      updateProperty(propertyId, payload),
+    onSuccess: async () => {
+      setPropertyModalMode(null);
+      await invalidateOperationalQueries();
+    },
+  });
+
+  const createTenantMutation = useMutation({
+    mutationFn: createTenant,
+    onSuccess: async () => {
+      setTenantName("");
+      setTenantAddress("");
+      setTenantPhone("");
+      setTenantRent("");
+      setTenantRentDay("");
+      setTenantJoinedOn("");
+      setTenantAdvance("");
+      setTenantOpeningDue("");
+      setIsTenantModalVisible(false);
+      setIsPropertyDetailVisible(false);
+      await invalidateOperationalQueries();
+    },
+  });
+
+  const assignCaretakerMutation = useMutation({
+    mutationFn: ({ propertyId, caretaker, caretakerPhone: phone }: { propertyId: string; caretaker?: string; caretakerPhone: string }) =>
+      assignCaretaker(propertyId, { caretaker, caretakerPhone: phone }),
+    onSuccess: async (result) => {
+      setCaretakerName("");
+      setCaretakerPhone("");
+      setIsCaretakerModalVisible(false);
+      setIsPropertyDetailVisible(false);
+      await queryClient.invalidateQueries({ queryKey: queryKeys.properties.list });
+
+      if (result.onboarding?.accountCreated) {
+        Alert.alert(
+          "Caretaker onboarded",
+          `Phone: ${result.onboarding.phone}\nTemporary password: ${result.onboarding.tempPassword ?? "shared default"}`
+        );
+      }
+    },
+  });
+
+  const loading =
+    summaryQuery.isPending ||
+    propertiesQuery.isPending ||
+    alertsQuery.isPending ||
+    ticketsQuery.isPending;
+
   const summary = summaryQuery.data ?? emptySummary;
   const properties = propertiesQuery.data ?? [];
   const alerts = alertsQuery.data ?? [];
   const tickets = ticketsQuery.data ?? [];
+  const propertyHistory = propertyHistoryQuery.data ?? [];
 
-  const healthStatus = (healthQuery.data?.status ?? "unknown").toString().toUpperCase();
-  const healthTone = healthStatus === "OK" || healthStatus === "HEALTHY" ? "success" : "warning";
+  const featuredProperties = useMemo(() => properties.slice(0, 4), [properties]);
+
+  const canSaveProperty =
+    propertyName.trim().length >= 2 &&
+    propertyAddress.trim().length >= 5 &&
+    !createPropertyMutation.isPending &&
+    !updatePropertyMutation.isPending;
+
+  const selectedPropertyOccupied =
+    (selectedProperty?.occupancyStatus ?? "available") === "occupied";
+
+  const canCreateTenant =
+    Boolean(selectedProperty?.id) &&
+    !selectedPropertyOccupied &&
+    tenantName.trim().length >= 2 &&
+    tenantAddress.trim().length >= 5 &&
+    tenantPhone.trim().length >= 8 &&
+    Number(tenantRent) >= 0 &&
+    Number(tenantRentDay) >= 1 &&
+    Number(tenantRentDay) <= 31 &&
+    tenantJoinedOn.trim().length > 0 &&
+    !createTenantMutation.isPending;
+
+  const canAssignCaretaker =
+    Boolean(selectedProperty?.id) &&
+    caretakerPhone.trim().length >= 8 &&
+    !assignCaretakerMutation.isPending;
 
   const firstError =
-    summaryQuery.error ?? propertiesQuery.error ?? alertsQuery.error ?? ticketsQuery.error ?? healthQuery.error ?? null;
+    summaryQuery.error ?? propertiesQuery.error ?? alertsQuery.error ?? ticketsQuery.error ?? null;
+
+  const openCreateProperty = () => {
+    setSelectedProperty(null);
+    setPropertyName("");
+    setPropertyAddress("");
+    setPropertyModalMode("create");
+  };
+
+  const openEditProperty = (property: Property) => {
+    setSelectedProperty(property);
+    setPropertyName(property.name);
+    setPropertyAddress(property.address);
+    setPropertyModalMode("edit");
+  };
+
+  const openPropertyDetail = (property: Property) => {
+    setSelectedProperty(property);
+    setCaretakerName(property.caretaker ?? "");
+    setCaretakerPhone(property.caretakerPhone ?? "");
+    setIsPropertyDetailVisible(true);
+  };
 
   if (loading) {
     return (
-      <Screen title="RentOk Dashboard" subtitle="Hostel operations at a glance">
+      <Screen title="RentOk Dashboard" subtitle="Operations home for owner and caretaker">
         <ActivityIndicator color={colors.primary} />
       </Screen>
     );
   }
 
   return (
-    <Screen title="RentOk Dashboard" subtitle="Simple daily control for caretaker and owner">
+    <Screen title="RentOk Dashboard" subtitle="Operations home for owner and caretaker">
+      <LinearGradient colors={["#FFFFFF", "#EFF5FF"]} style={styles.profileShell}>
+        <View style={styles.profileBadge}>
+          <Text style={styles.profileBadgeText}>{initials(user?.name)}</Text>
+        </View>
+        <View style={styles.profileInfo}>
+          <Text style={styles.profileName}>{user?.name ?? "RentOk User"}</Text>
+          <Text style={styles.profileMeta}>
+            {(user?.role ?? "caretaker").toUpperCase()} | {summary.totalProperties} properties under watch
+          </Text>
+        </View>
+        <Pressable style={styles.profileAction} onPress={signOut}>
+          <Text style={styles.profileActionText}>Sign Out</Text>
+        </Pressable>
+      </LinearGradient>
+
       {firstError ? (
         <InfoCard title="Network Notice">
           <Text style={styles.warningText}>{getErrorMessage(firstError)}</Text>
         </InfoCard>
       ) : null}
 
-      <InfoCard title="Server Health" rightNode={<Pill label={healthStatus} tone={healthTone} />}>
-        <Text style={styles.muted}>Base URL: {API_BASE_URL}</Text>
-      </InfoCard>
-
-      <InfoCard title="Session">
-        <View style={styles.rowSpread}>
-          <View style={styles.flexOne}>
-            <Text style={styles.bold}>{user?.name ?? "Authenticated User"}</Text>
-            <Text style={styles.muted}>Role: {(user?.role ?? "caretaker").toUpperCase()}</Text>
-          </View>
-          <Pressable style={styles.signOutButton} onPress={signOut}>
-            <Text style={styles.signOutText}>Sign Out</Text>
-          </Pressable>
-        </View>
-      </InfoCard>
-
-      <View style={styles.grid}>
-        <InfoCard title="Properties" value={`${summary.totalProperties}`} style={styles.metricCard} />
-        <InfoCard title="Occupancy" value={`${summary.occupiedBeds}/${summary.totalBeds}`} style={styles.metricCard} />
-        <InfoCard title="Active Tenants" value={`${summary.activeTenants}`} style={styles.metricCard} />
-        <InfoCard title="Open Complaints" value={`${summary.openMaintenance}`} style={styles.metricCard} />
+      <View style={styles.metricGrid}>
+        <LinearGradient colors={["#2B66FF", "#173FAF"]} style={styles.heroMetric}>
+          <Text style={styles.heroMetricLabel}>Pending Dues</Text>
+          <Text style={styles.heroMetricValue}>{currency(summary.pendingDues)}</Text>
+          <Text style={styles.heroMetricSub}>Keep this low with timely follow-ups.</Text>
+        </LinearGradient>
+        <InfoCard title="Collection This Month" value={currency(summary.monthCollection)} style={styles.metricCard} />
+        <InfoCard title="Occupied" value={`${summary.occupiedProperties}`} style={styles.metricCard} />
+        <InfoCard title="Available" value={`${summary.availableProperties}`} style={styles.metricCard} />
       </View>
 
-      <InfoCard title="This Month Financials">
-        <View style={styles.rowSpread}>
-          <Text style={styles.line}>Collection</Text>
-          <Text style={styles.valuePositive}>{currency(summary.monthCollection)}</Text>
-        </View>
-        <View style={styles.rowSpread}>
-          <Text style={styles.line}>Pending Dues</Text>
-          <Text style={styles.valueWarn}>{currency(summary.pendingDues)}</Text>
-        </View>
-        <View style={styles.rowSpread}>
-          <Text style={styles.line}>Expenses</Text>
-          <Text style={styles.valueDark}>{currency(summary.monthExpenses)}</Text>
-        </View>
-        <View style={[styles.rowSpread, styles.netRow]}>
-          <Text style={styles.netLabel}>Net Balance</Text>
-          <Text style={styles.netValue}>{currency(summary.monthCollection - summary.monthExpenses)}</Text>
+      <InfoCard
+        title="Properties Studio"
+        rightNode={
+          user?.role === "owner" ? (
+            <Pressable style={styles.inlineAction} onPress={openCreateProperty}>
+              <Text style={styles.inlineActionText}>Add Property</Text>
+            </Pressable>
+          ) : undefined
+        }
+      >
+        {featuredProperties.map((property) => (
+          <Pressable
+            key={property.id}
+            style={styles.propertyRow}
+            onPress={() => openPropertyDetail(property)}
+          >
+            <View style={styles.flexOne}>
+              <Text style={styles.propertyTitle}>{property.name}</Text>
+              <Text style={styles.propertyMeta}>{property.address}</Text>
+              <Text style={styles.propertyMeta}>
+                Caretaker: {property.caretakerPhone ?? "Not assigned"}
+              </Text>
+            </View>
+            <View style={styles.propertySide}>
+              <Pill
+                label={(property.occupancyStatus ?? "available").toUpperCase()}
+                tone={(property.occupancyStatus ?? "available") === "occupied" ? "warning" : "success"}
+              />
+              {user?.role === "owner" ? (
+                <Pressable style={styles.editPill} onPress={() => openEditProperty(property)}>
+                  <Text style={styles.editPillText}>Edit</Text>
+                </Pressable>
+              ) : null}
+            </View>
+          </Pressable>
+        ))}
+        {properties.length > 4 ? (
+          <Text style={styles.propertyHint}>
+            Showing {featuredProperties.length} of {properties.length} properties.
+          </Text>
+        ) : null}
+      </InfoCard>
+
+      <InfoCard title="Operations Pulse">
+        <View style={styles.pulseRow}>
+          <View style={styles.pulseItem}>
+            <Text style={styles.pulseValue}>{summary.activeTenants}</Text>
+            <Text style={styles.pulseLabel}>Active Tenants</Text>
+          </View>
+          <View style={styles.pulseItem}>
+            <Text style={styles.pulseValue}>{summary.openMaintenance}</Text>
+            <Text style={styles.pulseLabel}>Open Maintenance</Text>
+          </View>
+          <View style={styles.pulseItem}>
+            <Text style={styles.pulseValue}>{currency(summary.monthExpenses)}</Text>
+            <Text style={styles.pulseLabel}>Expenses</Text>
+          </View>
         </View>
       </InfoCard>
 
-      <InfoCard title="Properties">
-        {properties.map((property) => (
-          <View key={property.id} style={styles.listRow}>
+      <InfoCard title="Signals">
+        {alerts.slice(0, 3).map((alert) => (
+          <View key={alert.id} style={styles.signalRow}>
             <View style={styles.flexOne}>
-              <Text style={styles.bold}>{property.name}</Text>
-              <Text style={styles.muted}>{property.address}</Text>
-              <Text style={styles.muted}>Caretaker: {property.caretaker}</Text>
+              <Text style={styles.signalTitle}>{alert.title}</Text>
+              <Text style={styles.signalMeta}>{alert.message}</Text>
             </View>
-            <Pill label={`${property.occupiedBeds}/${property.totalBeds} beds`} tone="default" />
+            <Pill label={alert.type.toUpperCase()} tone={alert.type === "payment" ? "warning" : "default"} />
           </View>
         ))}
+        {alerts.length === 0 ? <Text style={styles.propertyHint}>No active signals.</Text> : null}
       </InfoCard>
 
-      <InfoCard title="Alerts">
-        {alerts.map((alert) => (
-          <View key={alert.id} style={styles.alertItem}>
-            <View style={styles.rowSpread}>
-              <Text style={styles.bold}>{alert.title}</Text>
-              <Pill label={alert.type.toUpperCase()} tone={alert.type === "payment" ? "warning" : "default"} />
-            </View>
-            <Text style={styles.muted}>{alert.message}</Text>
-            <Text style={styles.date}>{alert.date}</Text>
-          </View>
-        ))}
-      </InfoCard>
-
-      <InfoCard title="Support">
-        {tickets.map((ticket) => (
-          <View key={ticket.id} style={styles.listRow}>
+      <InfoCard title="Support Queue">
+        {tickets.slice(0, 3).map((ticket) => (
+          <View key={ticket.id} style={styles.signalRow}>
             <View style={styles.flexOne}>
-              <Text style={styles.bold}>{ticket.subject}</Text>
-              <Text style={styles.muted}>Created: {ticket.createdOn}</Text>
+              <Text style={styles.signalTitle}>{ticket.subject}</Text>
+              <Text style={styles.signalMeta}>Created {ticket.createdOn}</Text>
             </View>
             <Pill label={ticket.status} tone={ticket.status === "resolved" ? "success" : "warning"} />
           </View>
         ))}
+        {tickets.length === 0 ? <Text style={styles.propertyHint}>No support items right now.</Text> : null}
       </InfoCard>
 
-      <InfoCard title="Security and Privacy">
-        <Text style={styles.line}>Token-based auth contract (JWT ready)</Text>
-        <Text style={styles.line}>Role scaffold for owner and caretaker</Text>
-        <Text style={styles.line}>Encrypted storage and transport ready architecture</Text>
-      </InfoCard>
+      <Modal
+        visible={propertyModalMode !== null}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setPropertyModalMode(null)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>
+              {propertyModalMode === "create" ? "Add Property" : "Edit Property"}
+            </Text>
+            <TextInput style={styles.input} placeholder="Property name" placeholderTextColor={colors.textMuted} value={propertyName} onChangeText={setPropertyName} />
+            <TextInput style={styles.input} placeholder="Property address" placeholderTextColor={colors.textMuted} value={propertyAddress} onChangeText={setPropertyAddress} />
+            {createPropertyMutation.isError || updatePropertyMutation.isError ? (
+              <Text style={styles.warningText}>
+                {getErrorMessage(createPropertyMutation.error ?? updatePropertyMutation.error)}
+              </Text>
+            ) : null}
+            <View style={styles.modalActions}>
+              <Pressable style={styles.secondaryButton} onPress={() => setPropertyModalMode(null)}>
+                <Text style={styles.secondaryButtonText}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.primaryButton, !canSaveProperty && styles.buttonDisabled]}
+                disabled={!canSaveProperty}
+                onPress={() => {
+                  if (propertyModalMode === "edit" && selectedProperty?.id) {
+                    updatePropertyMutation.mutate({
+                      propertyId: selectedProperty.id,
+                      payload: {
+                        name: propertyName.trim(),
+                        address: propertyAddress.trim(),
+                      },
+                    });
+                    return;
+                  }
+                  createPropertyMutation.mutate({
+                    name: propertyName.trim(),
+                    address: propertyAddress.trim(),
+                  });
+                }}
+              >
+                <Text style={styles.primaryButtonText}>
+                  {createPropertyMutation.isPending || updatePropertyMutation.isPending ? "Saving..." : "Save"}
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={isPropertyDetailVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setIsPropertyDetailVisible(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.modalCard, styles.largeModal]}>
+            <Text style={styles.modalTitle}>{selectedProperty?.name ?? "Property"}</Text>
+            <Text style={styles.modalMeta}>{selectedProperty?.address ?? ""}</Text>
+            <Text style={styles.modalMeta}>
+              Status: {(selectedProperty?.occupancyStatus ?? "available").toUpperCase()}
+            </Text>
+
+            <View style={styles.stackActions}>
+              <Pressable
+                style={[styles.primaryButton, selectedPropertyOccupied && styles.buttonDisabled]}
+                disabled={selectedPropertyOccupied}
+                onPress={() => {
+                  if (selectedPropertyOccupied) return;
+                  setIsPropertyDetailVisible(false);
+                  setIsTenantModalVisible(true);
+                }}
+              >
+                <Text style={styles.primaryButtonText}>
+                  {selectedPropertyOccupied ? "Property Occupied" : "Add Tenant"}
+                </Text>
+              </Pressable>
+              <Pressable
+                style={styles.secondaryButton}
+                onPress={() => {
+                  setIsPropertyDetailVisible(false);
+                  setIsCaretakerModalVisible(true);
+                }}
+              >
+                <Text style={styles.secondaryButtonText}>Assign Caretaker</Text>
+              </Pressable>
+              {user?.role === "owner" && selectedProperty ? (
+                <Pressable style={styles.secondaryButton} onPress={() => {
+                  setIsPropertyDetailVisible(false);
+                  openEditProperty(selectedProperty);
+                }}>
+                  <Text style={styles.secondaryButtonText}>Edit Property</Text>
+                </Pressable>
+              ) : null}
+            </View>
+
+            <View style={styles.historyBlock}>
+              <Text style={styles.historyTitle}>Occupancy Timeline</Text>
+              {propertyHistoryQuery.isPending ? <ActivityIndicator color={colors.primary} /> : null}
+              {propertyHistory.slice(0, 6).map((tenant) => (
+                <View key={tenant.id} style={styles.historyRow}>
+                  <View style={styles.flexOne}>
+                    <Text style={styles.signalTitle}>{tenant.fullName}</Text>
+                    <Text style={styles.signalMeta}>
+                      Joined {formatDate(tenant.joinedOn)} | Vacated {formatDate(tenant.vacatedOn)}
+                    </Text>
+                  </View>
+                  <Pill label={tenant.status.toUpperCase()} tone={tenant.status === "active" ? "success" : "default"} />
+                </View>
+              ))}
+              {!propertyHistoryQuery.isPending && propertyHistory.length === 0 ? (
+                <Text style={styles.propertyHint}>No tenant history for this property yet.</Text>
+              ) : null}
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={isTenantModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setIsTenantModalVisible(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Add Tenant</Text>
+            <Text style={styles.modalMeta}>{selectedProperty?.name ?? ""}</Text>
+            <TextInput style={styles.input} placeholder="Tenant name" placeholderTextColor={colors.textMuted} value={tenantName} onChangeText={setTenantName} />
+            <TextInput style={styles.input} placeholder="Tenant address" placeholderTextColor={colors.textMuted} value={tenantAddress} onChangeText={setTenantAddress} />
+            <TextInput style={styles.input} placeholder="Mobile number" placeholderTextColor={colors.textMuted} keyboardType="phone-pad" value={tenantPhone} onChangeText={setTenantPhone} />
+            <TextInput style={styles.input} placeholder="Monthly rent" placeholderTextColor={colors.textMuted} keyboardType="numeric" value={tenantRent} onChangeText={setTenantRent} />
+            <TextInput style={styles.input} placeholder="Pay day in month (1-31)" placeholderTextColor={colors.textMuted} keyboardType="numeric" value={tenantRentDay} onChangeText={setTenantRentDay} />
+            <TextInput style={styles.input} placeholder="Joined on (YYYY-MM-DD)" placeholderTextColor={colors.textMuted} value={tenantJoinedOn} onChangeText={setTenantJoinedOn} />
+            <TextInput style={styles.input} placeholder="Advance amount" placeholderTextColor={colors.textMuted} keyboardType="numeric" value={tenantAdvance} onChangeText={setTenantAdvance} />
+            <TextInput style={styles.input} placeholder="Opening due amount" placeholderTextColor={colors.textMuted} keyboardType="numeric" value={tenantOpeningDue} onChangeText={setTenantOpeningDue} />
+            {createTenantMutation.isError ? <Text style={styles.warningText}>{getErrorMessage(createTenantMutation.error)}</Text> : null}
+            <View style={styles.modalActions}>
+              <Pressable style={styles.secondaryButton} onPress={() => setIsTenantModalVisible(false)}>
+                <Text style={styles.secondaryButtonText}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.primaryButton, !canCreateTenant && styles.buttonDisabled]}
+                disabled={!canCreateTenant}
+                onPress={() => {
+                  if (!selectedProperty?.id) return;
+                  createTenantMutation.mutate({
+                    fullName: tenantName.trim(),
+                    fullAddress: tenantAddress.trim(),
+                    phone: tenantPhone.trim(),
+                    propertyId: selectedProperty.id,
+                    monthlyRent: Number(tenantRent),
+                    rentDueDay: Number(tenantRentDay),
+                    joinedOn: tenantJoinedOn.trim(),
+                    advanceAmount: Number(tenantAdvance || 0),
+                    openingDueAmount: Number(tenantOpeningDue || 0),
+                  });
+                }}
+              >
+                <Text style={styles.primaryButtonText}>
+                  {createTenantMutation.isPending ? "Saving..." : "Save Tenant"}
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={isCaretakerModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setIsCaretakerModalVisible(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Assign Caretaker</Text>
+            <Text style={styles.modalMeta}>{selectedProperty?.name ?? ""}</Text>
+            <TextInput style={styles.input} placeholder="Caretaker name (optional)" placeholderTextColor={colors.textMuted} value={caretakerName} onChangeText={setCaretakerName} />
+            <TextInput style={styles.input} placeholder="Caretaker mobile" placeholderTextColor={colors.textMuted} keyboardType="phone-pad" value={caretakerPhone} onChangeText={setCaretakerPhone} />
+            {assignCaretakerMutation.isError ? <Text style={styles.warningText}>{getErrorMessage(assignCaretakerMutation.error)}</Text> : null}
+            <View style={styles.modalActions}>
+              <Pressable style={styles.secondaryButton} onPress={() => setIsCaretakerModalVisible(false)}>
+                <Text style={styles.secondaryButtonText}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.primaryButton, !canAssignCaretaker && styles.buttonDisabled]}
+                disabled={!canAssignCaretaker}
+                onPress={() => {
+                  if (!selectedProperty?.id) return;
+                  assignCaretakerMutation.mutate({
+                    propertyId: selectedProperty.id,
+                    caretaker: caretakerName.trim() || undefined,
+                    caretakerPhone: caretakerPhone.trim(),
+                  });
+                }}
+              >
+                <Text style={styles.primaryButtonText}>
+                  {assignCaretakerMutation.isPending ? "Saving..." : "Save"}
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  grid: {
+  profileShell: {
+    borderRadius: 24,
+    padding: 14,
     flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "space-between",
-    gap: 10
+    alignItems: "center",
+    gap: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  profileBadge: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: colors.primaryDark,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  profileBadgeText: {
+    color: "#FFFFFF",
+    fontFamily: fonts.display,
+    fontSize: 18,
+  },
+  profileInfo: {
+    flex: 1,
+    gap: 3,
+  },
+  profileName: {
+    color: colors.textPrimary,
+    fontFamily: fonts.display,
+    fontSize: 18,
+  },
+  profileMeta: {
+    color: colors.textMuted,
+    fontFamily: fonts.body,
+    fontSize: 12,
+  },
+  profileAction: {
+    borderRadius: 999,
+    backgroundColor: colors.primarySoft,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+  },
+  profileActionText: {
+    color: colors.primaryDark,
+    fontFamily: fonts.heading,
+    fontSize: 12,
+  },
+  metricGrid: {
+    gap: 10,
+  },
+  heroMetric: {
+    borderRadius: 24,
+    padding: 16,
+    gap: 5,
+  },
+  heroMetricLabel: {
+    color: "#DCE7FF",
+    fontFamily: fonts.heading,
+    fontSize: 12,
+  },
+  heroMetricValue: {
+    color: "#FFFFFF",
+    fontFamily: fonts.display,
+    fontSize: 28,
+  },
+  heroMetricSub: {
+    color: "#C9DBFF",
+    fontFamily: fonts.body,
+    fontSize: 12,
   },
   metricCard: {
-    width: "48%"
+    width: "100%",
   },
-  rowSpread: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: 8
+  inlineAction: {
+    borderRadius: 999,
+    backgroundColor: colors.primarySoft,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
   },
-  listRow: {
+  inlineActionText: {
+    color: colors.primaryDark,
+    fontFamily: fonts.heading,
+    fontSize: 12,
+  },
+  propertyRow: {
     flexDirection: "row",
-    justifyContent: "space-between",
+    gap: 12,
+    alignItems: "flex-start",
+    paddingVertical: 6,
+  },
+  propertyTitle: {
+    color: colors.textPrimary,
+    fontFamily: fonts.heading,
+    fontSize: 14,
+  },
+  propertyMeta: {
+    color: colors.textMuted,
+    fontFamily: fonts.body,
+    fontSize: 12,
+  },
+  propertySide: {
+    alignItems: "flex-end",
+    gap: 8,
+  },
+  editPill: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceAlt,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  editPillText: {
+    color: colors.primaryDark,
+    fontFamily: fonts.heading,
+    fontSize: 11,
+  },
+  propertyHint: {
+    color: colors.textMuted,
+    fontFamily: fonts.body,
+    fontSize: 12,
+  },
+  pulseRow: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  pulseItem: {
+    flex: 1,
+    borderRadius: 16,
+    backgroundColor: colors.surfaceAlt,
+    padding: 12,
+    gap: 4,
+  },
+  pulseValue: {
+    color: colors.textPrimary,
+    fontFamily: fonts.display,
+    fontSize: 18,
+  },
+  pulseLabel: {
+    color: colors.textMuted,
+    fontFamily: fonts.body,
+    fontSize: 11,
+  },
+  signalRow: {
+    flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    paddingVertical: 4
+    paddingVertical: 4,
+  },
+  signalTitle: {
+    color: colors.textPrimary,
+    fontFamily: fonts.heading,
+    fontSize: 13,
+  },
+  signalMeta: {
+    color: colors.textMuted,
+    fontFamily: fonts.body,
+    fontSize: 12,
   },
   flexOne: {
     flex: 1,
-    gap: 2
-  },
-  line: {
-    fontSize: 13,
-    color: colors.textMuted,
-    fontFamily: fonts.body
-  },
-  valuePositive: {
-    fontSize: 13,
-    color: colors.success,
-    fontFamily: fonts.heading
-  },
-  valueWarn: {
-    fontSize: 13,
-    color: colors.warning,
-    fontFamily: fonts.heading
-  },
-  valueDark: {
-    fontSize: 13,
-    color: colors.textPrimary,
-    fontFamily: fonts.heading
-  },
-  netRow: {
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    marginTop: 3,
-    paddingTop: 8
-  },
-  netLabel: {
-    fontSize: 14,
-    color: colors.textSecondary,
-    fontFamily: fonts.heading
-  },
-  netValue: {
-    fontSize: 16,
-    color: colors.primaryDark,
-    fontFamily: fonts.display
-  },
-  bold: {
-    fontSize: 14,
-    color: colors.textPrimary,
-    fontFamily: fonts.heading
-  },
-  muted: {
-    fontSize: 12,
-    color: colors.textMuted,
-    fontFamily: fonts.body
-  },
-  alertItem: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surfaceAlt,
-    borderRadius: 14,
-    padding: 10,
-    gap: 5
-  },
-  date: {
-    fontSize: 12,
-    color: colors.textMuted,
-    fontFamily: fonts.body
   },
   warningText: {
     color: colors.warning,
-    fontSize: 13,
-    fontFamily: fonts.heading
+    fontFamily: fonts.heading,
+    fontSize: 12,
   },
-  signOutButton: {
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(9,18,39,0.45)",
+    justifyContent: "flex-end",
+  },
+  modalCard: {
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: radii.card,
+    borderTopRightRadius: radii.card,
+    padding: 16,
+    gap: 10,
+    borderWidth: 1,
+    borderColor: colors.border,
+    maxHeight: "88%",
+  },
+  largeModal: {
+    minHeight: "58%",
+  },
+  modalTitle: {
+    color: colors.textPrimary,
+    fontFamily: fonts.display,
+    fontSize: 20,
+  },
+  modalMeta: {
+    color: colors.textMuted,
+    fontFamily: fonts.body,
+    fontSize: 12,
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radii.button,
+    backgroundColor: "#FFFFFF",
+    paddingHorizontal: 12,
+    paddingVertical: 11,
+    color: colors.textPrimary,
+    fontFamily: fonts.body,
+    fontSize: 14,
+  },
+  modalActions: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  stackActions: {
+    gap: 8,
+  },
+  primaryButton: {
+    borderRadius: radii.button,
+    backgroundColor: colors.primary,
+    minHeight: 42,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 14,
+  },
+  primaryButtonText: {
+    color: "#FFFFFF",
+    fontFamily: fonts.heading,
+    fontSize: 13,
+  },
+  secondaryButton: {
+    borderRadius: radii.button,
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.surfaceAlt,
-    borderRadius: 10,
-    paddingVertical: 8,
-    paddingHorizontal: 12
+    minHeight: 42,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 14,
+    flex: 1,
   },
-  signOutText: {
+  secondaryButtonText: {
     color: colors.primaryDark,
     fontFamily: fonts.heading,
-    fontSize: 12
-  }
+    fontSize: 13,
+  },
+  buttonDisabled: {
+    opacity: 0.6,
+  },
+  historyBlock: {
+    gap: 8,
+    marginTop: 6,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  historyTitle: {
+    color: colors.textSecondary,
+    fontFamily: fonts.heading,
+    fontSize: 13,
+  },
+  historyRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingVertical: 3,
+  },
 });

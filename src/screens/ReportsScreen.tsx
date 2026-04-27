@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { ActivityIndicator, Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { ActivityIndicator, Linking, Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Screen } from "../components/Screen";
@@ -25,6 +25,7 @@ export function ReportsScreen() {
   const { width } = useWindowDimensions();
   const [downloadText, setDownloadText] = useState("No report download yet.");
   const [activeReportId, setActiveReportId] = useState<string | null>(null);
+  const [lastDownloadUrl, setLastDownloadUrl] = useState<string | null>(null);
 
   const documentsQuery = useQuery({ queryKey: queryKeys.documents.list, queryFn: () => getDocuments() });
   const expensesQuery = useQuery({ queryKey: [...queryKeys.expenses.list, monthKey], queryFn: () => getExpenses(monthKey) });
@@ -33,14 +34,17 @@ export function ReportsScreen() {
     mutationFn: generateReport,
     onSuccess: (result) => {
       if (result.downloadUrl) {
+        setLastDownloadUrl(result.downloadUrl);
         setDownloadText(`Report ready: ${result.downloadUrl}`);
         return;
       }
 
+      setLastDownloadUrl(null);
       setDownloadText(`${result.fileName ?? "Report"} generated successfully.`);
     },
     onError: (error) => {
       const message = error instanceof Error ? error.message : "Unable to generate report.";
+      setLastDownloadUrl(null);
       setDownloadText(message);
     },
     onSettled: () => {
@@ -78,6 +82,16 @@ export function ReportsScreen() {
       <LinearGradient colors={["#3A7BFF", "#133CA6"]} style={styles.hero}>
         <Text style={styles.heroTitle}>Accounting and Excel Reports</Text>
         <Text style={styles.heroMeta}>{downloadText}</Text>
+        {lastDownloadUrl ? (
+          <Pressable
+            style={styles.openLinkButton}
+            onPress={() => {
+              void Linking.openURL(lastDownloadUrl);
+            }}
+          >
+            <Text style={styles.openLinkButtonText}>Open Last Report</Text>
+          </Pressable>
+        ) : null}
       </LinearGradient>
 
       <View style={styles.reportGrid}>
@@ -141,7 +155,7 @@ export function ReportsScreen() {
             <View style={styles.flexOne}>
               <Text style={styles.itemTitle}>{expense.category}</Text>
               <Text style={styles.itemMeta}>
-                {expense.paidBy} -> {expense.paidTo}
+                {`${expense.paidBy} -> ${expense.paidTo}`}
               </Text>
             </View>
             <Text style={styles.amount}>INR {expense.amount.toLocaleString("en-IN")}</Text>
@@ -167,6 +181,20 @@ const styles = StyleSheet.create({
     color: "#D9E6FF",
     fontSize: 12,
     fontFamily: fonts.body
+  },
+  openLinkButton: {
+    marginTop: 6,
+    alignSelf: "flex-start",
+    borderWidth: 1,
+    borderColor: "#D9E6FF",
+    borderRadius: radii.button,
+    paddingHorizontal: 12,
+    paddingVertical: 8
+  },
+  openLinkButtonText: {
+    color: "#FFFFFF",
+    fontFamily: fonts.heading,
+    fontSize: 12
   },
   reportGrid: {
     flexDirection: "row",

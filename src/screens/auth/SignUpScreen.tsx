@@ -15,9 +15,7 @@ export function SignUpScreen() {
   const { signIn } = useAuth();
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
-  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState<"owner" | "caretaker">("owner");
 
   const registerMutation = useMutation({
     mutationFn: register,
@@ -38,7 +36,6 @@ export function SignUpScreen() {
   const canSubmit =
     name.trim().length > 0 &&
     phone.trim().length > 0 &&
-    email.trim().length > 0 &&
     password.trim().length >= 6 &&
     !registerMutation.isPending;
 
@@ -46,8 +43,8 @@ export function SignUpScreen() {
     <View style={styles.page}>
       <View style={styles.hero}>
         <Text style={styles.brand}>RentOk</Text>
-        <Text style={styles.title}>Create account</Text>
-        <Text style={styles.subtitle}>Set up your owner/caretaker account to start using RentOk.</Text>
+        <Text style={styles.title}>Create owner account</Text>
+        <Text style={styles.subtitle}>Caretakers are onboarded by owner from Property - Assign Caretaker.</Text>
       </View>
 
       <View style={styles.card}>
@@ -71,17 +68,6 @@ export function SignUpScreen() {
           onChangeText={setPhone}
         />
 
-        <Text style={styles.label}>Email</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="you@example.com"
-          placeholderTextColor={colors.textMuted}
-          autoCapitalize="none"
-          keyboardType="email-address"
-          value={email}
-          onChangeText={setEmail}
-        />
-
         <Text style={styles.label}>Password</Text>
         <TextInput
           style={styles.input}
@@ -92,21 +78,18 @@ export function SignUpScreen() {
           onChangeText={setPassword}
         />
 
-        <Text style={styles.label}>Role</Text>
-        <View style={styles.roleRow}>
-          <Pressable style={[styles.roleChip, role === "owner" && styles.roleChipActive]} onPress={() => setRole("owner")}>
-            <Text style={[styles.roleText, role === "owner" && styles.roleTextActive]}>Owner</Text>
-          </Pressable>
-          <Pressable style={[styles.roleChip, role === "caretaker" && styles.roleChipActive]} onPress={() => setRole("caretaker")}>
-            <Text style={[styles.roleText, role === "caretaker" && styles.roleTextActive]}>Caretaker</Text>
-          </Pressable>
-        </View>
-
         {registerMutation.isError ? <Text style={styles.error}>{registerMutation.error.message}</Text> : null}
 
         <Pressable
           style={[styles.primaryButton, !canSubmit && styles.buttonDisabled]}
-          onPress={() => registerMutation.mutate({ name: name.trim(), phone: phone.trim(), email: email.trim(), password, role })}
+          onPress={() =>
+            registerMutation.mutate({
+              name: name.trim(),
+              phone: phone.trim(),
+              password,
+              role: "owner"
+            })
+          }
           disabled={!canSubmit}
         >
           {registerMutation.isPending ? (
@@ -176,32 +159,6 @@ const styles = StyleSheet.create({
     fontFamily: fonts.body,
     fontSize: 14
   },
-  roleRow: {
-    flexDirection: "row",
-    gap: 8
-  },
-  roleChip: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radii.button,
-    backgroundColor: colors.surfaceAlt,
-    minHeight: 42,
-    alignItems: "center",
-    justifyContent: "center"
-  },
-  roleChipActive: {
-    borderColor: colors.primary,
-    backgroundColor: colors.primarySoft
-  },
-  roleText: {
-    color: colors.textSecondary,
-    fontFamily: fonts.heading,
-    fontSize: 13
-  },
-  roleTextActive: {
-    color: colors.primaryDark
-  },
   primaryButton: {
     marginTop: 6,
     borderRadius: radii.button,
@@ -234,3 +191,4 @@ const styles = StyleSheet.create({
     opacity: 0.6
   }
 });
+

@@ -5,10 +5,18 @@ export type LoginPayload = {
   password: string;
 };
 
+export type UserRole = "owner" | "caretaker";
+
 export type AuthUser = {
   id: string;
   name: string;
-  role: string;
+  role: UserRole;
+};
+
+type RawAuthUser = {
+  id?: unknown;
+  name?: unknown;
+  role?: unknown;
 };
 
 export type LoginResponse = {
@@ -20,9 +28,9 @@ export type LoginResponse = {
 export type RegisterPayload = {
   name: string;
   phone: string;
-  email: string;
   password: string;
-  role: string;
+  role: UserRole;
+  ownerId?: string;
 };
 
 export type RegisterResponse = {
@@ -32,10 +40,45 @@ export type RegisterResponse = {
   message?: string;
 };
 
-export async function login(payload: LoginPayload) {
-  return httpClient.post<LoginResponse>("/auth/login", payload);
+const isAppRole = (role: unknown): role is UserRole => role === "owner" || role === "caretaker";
+
+const normalizeAuthUser = (rawUser: RawAuthUser): AuthUser => {
+  if (!isAppRole(rawUser.role)) {
+    throw new Error("This app supports only owner and caretaker accounts.");
+  }
+
+  return {
+    id: String(rawUser.id ?? ""),
+    name: String(rawUser.name ?? ""),
+    role: rawUser.role
+  };
+};
+
+export async function login(payload: LoginPayload): Promise<LoginResponse> {
+  const result = await httpClient.post<{ token: string; refreshToken: string; user: RawAuthUser }>(
+    "/auth/login",
+    payload
+  );
+
+  return {
+    token: result.token,
+    refreshToken: result.refreshToken,
+    user: normalizeAuthUser(result.user ?? {})
+  };
 }
 
-export async function register(payload: RegisterPayload) {
-  return httpClient.post<RegisterResponse>("/auth/register", payload);
+export async function register(payload: RegisterPayload): Promise<RegisterResponse> {
+  const result = await httpClient.post<{
+    token?: string;
+    refreshToken?: string;
+    user?: RawAuthUser;
+    message?: string;
+  }>("/auth/register", payload);
+
+  return {
+    token: result.token,
+    refreshToken: result.refreshToken,
+    user: result.user ? normalizeAuthUser(result.user) : undefined,
+    message: result.message
+  };
 }
