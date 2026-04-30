@@ -1,7 +1,8 @@
 import React, { ReactNode } from "react";
-import { SafeAreaView, ScrollView, StyleSheet, Text, View } from "react-native";
+import {  ScrollView, StyleSheet, Text, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { colors, fonts } from "../theme/tokens";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 type Props = {
   title: string;

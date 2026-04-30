@@ -9,18 +9,20 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
+import { useNavigation } from "@react-navigation/native";
+import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { InfoCard } from "../components/InfoCard";
 import { Pill } from "../components/Pill";
 import { Screen } from "../components/Screen";
+import { DateField } from "../components/DateField";
 import { getDashboardSummary } from "../services/api/dashboardService";
 import { getNotifications } from "../services/api/notificationService";
 import {
   assignCaretaker,
-  createProperty,
   getProperties,
-  updateProperty,
 } from "../services/api/propertyService";
 import { queryKeys } from "../services/api/queryKeys";
 import { getSupportTickets } from "../services/api/supportService";
@@ -28,6 +30,7 @@ import { createTenant, getTenants } from "../services/api/tenantService";
 import { useAuth } from "../store/AuthContext";
 import { colors, fonts, radii } from "../theme/tokens";
 import { DashboardSummary, Property } from "../types/models";
+import { AppStackParamList } from "../navigation/AppStackNavigator";
 
 const currency = (value: number) => `INR ${value.toLocaleString("en-IN")}`;
 
@@ -62,7 +65,8 @@ function initials(name?: string) {
 }
 
 export function DashboardScreen() {
-  const { user, signOut } = useAuth();
+  const { user } = useAuth();
+  const navigation = useNavigation<NativeStackNavigationProp<AppStackParamList>>();
   const queryClient = useQueryClient();
   const summaryQuery = useQuery({ queryKey: queryKeys.dashboard.summary, queryFn: getDashboardSummary });
   const propertiesQuery = useQuery({ queryKey: queryKeys.properties.list, queryFn: getProperties });
@@ -70,7 +74,6 @@ export function DashboardScreen() {
   const ticketsQuery = useQuery({ queryKey: queryKeys.support.tickets, queryFn: getSupportTickets });
 
   const [selectedProperty, setSelectedProperty] = useState<Property | null>(null);
-  const [propertyModalMode, setPropertyModalMode] = useState<"create" | "edit" | null>(null);
   const [isPropertyDetailVisible, setIsPropertyDetailVisible] = useState(false);
   const [isTenantModalVisible, setIsTenantModalVisible] = useState(false);
   const [isCaretakerModalVisible, setIsCaretakerModalVisible] = useState(false);
@@ -80,9 +83,6 @@ export function DashboardScreen() {
     queryFn: () => getTenants({ propertyId: selectedProperty?.id, includeInactive: true }),
     enabled: Boolean(selectedProperty?.id),
   });
-
-  const [propertyName, setPropertyName] = useState("");
-  const [propertyAddress, setPropertyAddress] = useState("");
 
   const [tenantName, setTenantName] = useState("");
   const [tenantAddress, setTenantAddress] = useState("");
@@ -103,25 +103,6 @@ export function DashboardScreen() {
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.summary }),
     ]);
   };
-
-  const createPropertyMutation = useMutation({
-    mutationFn: createProperty,
-    onSuccess: async () => {
-      setPropertyModalMode(null);
-      setPropertyName("");
-      setPropertyAddress("");
-      await invalidateOperationalQueries();
-    },
-  });
-
-  const updatePropertyMutation = useMutation({
-    mutationFn: ({ propertyId, payload }: { propertyId: string; payload: { name: string; address: string } }) =>
-      updateProperty(propertyId, payload),
-    onSuccess: async () => {
-      setPropertyModalMode(null);
-      await invalidateOperationalQueries();
-    },
-  });
 
   const createTenantMutation = useMutation({
     mutationFn: createTenant,
@@ -171,13 +152,7 @@ export function DashboardScreen() {
   const tickets = ticketsQuery.data ?? [];
   const propertyHistory = propertyHistoryQuery.data ?? [];
 
-  const featuredProperties = useMemo(() => properties.slice(0, 4), [properties]);
-
-  const canSaveProperty =
-    propertyName.trim().length >= 2 &&
-    propertyAddress.trim().length >= 5 &&
-    !createPropertyMutation.isPending &&
-    !updatePropertyMutation.isPending;
+  const featuredProperties = useMemo(() => properties, [properties]);
 
   const selectedPropertyOccupied =
     (selectedProperty?.occupancyStatus ?? "available") === "occupied";
@@ -203,17 +178,7 @@ export function DashboardScreen() {
     summaryQuery.error ?? propertiesQuery.error ?? alertsQuery.error ?? ticketsQuery.error ?? null;
 
   const openCreateProperty = () => {
-    setSelectedProperty(null);
-    setPropertyName("");
-    setPropertyAddress("");
-    setPropertyModalMode("create");
-  };
-
-  const openEditProperty = (property: Property) => {
-    setSelectedProperty(property);
-    setPropertyName(property.name);
-    setPropertyAddress(property.address);
-    setPropertyModalMode("edit");
+    navigation.navigate("PropertyForm");
   };
 
   const openPropertyDetail = (property: Property) => {
@@ -243,9 +208,6 @@ export function DashboardScreen() {
             {(user?.role ?? "caretaker").toUpperCase()} | {summary.totalProperties} properties under watch
           </Text>
         </View>
-        <Pressable style={styles.profileAction} onPress={signOut}>
-          <Text style={styles.profileActionText}>Sign Out</Text>
-        </Pressable>
       </LinearGradient>
 
       {firstError ? (
@@ -270,11 +232,16 @@ export function DashboardScreen() {
         rightNode={
           user?.role === "owner" ? (
             <Pressable style={styles.inlineAction} onPress={openCreateProperty}>
-              <Text style={styles.inlineActionText}>Add Property</Text>
+              <Ionicons name="add-circle-outline" size={18} color={colors.primaryDark} />
             </Pressable>
           ) : undefined
         }
       >
+        {featuredProperties.length === 0 ? (
+          <Pressable style={styles.emptyPropertyCta} onPress={openCreateProperty}>
+            <Text style={styles.emptyPropertyText}>No properties yet. Tap here to add one.</Text>
+          </Pressable>
+        ) : null}
         {featuredProperties.map((property) => (
           <Pressable
             key={property.id}
@@ -294,18 +261,16 @@ export function DashboardScreen() {
                 tone={(property.occupancyStatus ?? "available") === "occupied" ? "warning" : "success"}
               />
               {user?.role === "owner" ? (
-                <Pressable style={styles.editPill} onPress={() => openEditProperty(property)}>
+                <Pressable
+                  style={styles.editPill}
+                  onPress={() => navigation.navigate("PropertyForm", { property })}
+                >
                   <Text style={styles.editPillText}>Edit</Text>
                 </Pressable>
               ) : null}
             </View>
           </Pressable>
         ))}
-        {properties.length > 4 ? (
-          <Text style={styles.propertyHint}>
-            Showing {featuredProperties.length} of {properties.length} properties.
-          </Text>
-        ) : null}
       </InfoCard>
 
       <InfoCard title="Operations Pulse">
@@ -352,57 +317,6 @@ export function DashboardScreen() {
       </InfoCard>
 
       <Modal
-        visible={propertyModalMode !== null}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setPropertyModalMode(null)}
-      >
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>
-              {propertyModalMode === "create" ? "Add Property" : "Edit Property"}
-            </Text>
-            <TextInput style={styles.input} placeholder="Property name" placeholderTextColor={colors.textMuted} value={propertyName} onChangeText={setPropertyName} />
-            <TextInput style={styles.input} placeholder="Property address" placeholderTextColor={colors.textMuted} value={propertyAddress} onChangeText={setPropertyAddress} />
-            {createPropertyMutation.isError || updatePropertyMutation.isError ? (
-              <Text style={styles.warningText}>
-                {getErrorMessage(createPropertyMutation.error ?? updatePropertyMutation.error)}
-              </Text>
-            ) : null}
-            <View style={styles.modalActions}>
-              <Pressable style={styles.secondaryButton} onPress={() => setPropertyModalMode(null)}>
-                <Text style={styles.secondaryButtonText}>Cancel</Text>
-              </Pressable>
-              <Pressable
-                style={[styles.primaryButton, !canSaveProperty && styles.buttonDisabled]}
-                disabled={!canSaveProperty}
-                onPress={() => {
-                  if (propertyModalMode === "edit" && selectedProperty?.id) {
-                    updatePropertyMutation.mutate({
-                      propertyId: selectedProperty.id,
-                      payload: {
-                        name: propertyName.trim(),
-                        address: propertyAddress.trim(),
-                      },
-                    });
-                    return;
-                  }
-                  createPropertyMutation.mutate({
-                    name: propertyName.trim(),
-                    address: propertyAddress.trim(),
-                  });
-                }}
-              >
-                <Text style={styles.primaryButtonText}>
-                  {createPropertyMutation.isPending || updatePropertyMutation.isPending ? "Saving..." : "Save"}
-                </Text>
-              </Pressable>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      <Modal
         visible={isPropertyDetailVisible}
         transparent
         animationType="slide"
@@ -410,7 +324,12 @@ export function DashboardScreen() {
       >
         <View style={styles.modalBackdrop}>
           <View style={[styles.modalCard, styles.largeModal]}>
-            <Text style={styles.modalTitle}>{selectedProperty?.name ?? "Property"}</Text>
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, styles.modalHeaderTitle]}>{selectedProperty?.name ?? "Property"}</Text>
+              <Pressable style={styles.modalCloseButton} onPress={() => setIsPropertyDetailVisible(false)}>
+                <Text style={styles.modalCloseText}>X</Text>
+              </Pressable>
+            </View>
             <Text style={styles.modalMeta}>{selectedProperty?.address ?? ""}</Text>
             <Text style={styles.modalMeta}>
               Status: {(selectedProperty?.occupancyStatus ?? "available").toUpperCase()}
@@ -421,9 +340,13 @@ export function DashboardScreen() {
                 style={[styles.primaryButton, selectedPropertyOccupied && styles.buttonDisabled]}
                 disabled={selectedPropertyOccupied}
                 onPress={() => {
-                  if (selectedPropertyOccupied) return;
+                  if (selectedPropertyOccupied || !selectedProperty) return;
                   setIsPropertyDetailVisible(false);
-                  setIsTenantModalVisible(true);
+                  navigation.navigate("TenantForm", {
+                    propertyId: selectedProperty.id,
+                    propertyName: selectedProperty.name,
+                    propertyAddress: selectedProperty.address,
+                  });
                 }}
               >
                 <Text style={styles.primaryButtonText}>
@@ -442,7 +365,7 @@ export function DashboardScreen() {
               {user?.role === "owner" && selectedProperty ? (
                 <Pressable style={styles.secondaryButton} onPress={() => {
                   setIsPropertyDetailVisible(false);
-                  openEditProperty(selectedProperty);
+                  navigation.navigate("PropertyForm", { property: selectedProperty });
                 }}>
                   <Text style={styles.secondaryButtonText}>Edit Property</Text>
                 </Pressable>
@@ -479,14 +402,23 @@ export function DashboardScreen() {
       >
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Add Tenant</Text>
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, styles.modalHeaderTitle]}>Add Tenant</Text>
+              <Pressable style={styles.modalCloseButton} onPress={() => setIsTenantModalVisible(false)}>
+                <Text style={styles.modalCloseText}>X</Text>
+              </Pressable>
+            </View>
             <Text style={styles.modalMeta}>{selectedProperty?.name ?? ""}</Text>
             <TextInput style={styles.input} placeholder="Tenant name" placeholderTextColor={colors.textMuted} value={tenantName} onChangeText={setTenantName} />
             <TextInput style={styles.input} placeholder="Tenant address" placeholderTextColor={colors.textMuted} value={tenantAddress} onChangeText={setTenantAddress} />
             <TextInput style={styles.input} placeholder="Mobile number" placeholderTextColor={colors.textMuted} keyboardType="phone-pad" value={tenantPhone} onChangeText={setTenantPhone} />
             <TextInput style={styles.input} placeholder="Monthly rent" placeholderTextColor={colors.textMuted} keyboardType="numeric" value={tenantRent} onChangeText={setTenantRent} />
             <TextInput style={styles.input} placeholder="Pay day in month (1-31)" placeholderTextColor={colors.textMuted} keyboardType="numeric" value={tenantRentDay} onChangeText={setTenantRentDay} />
-            <TextInput style={styles.input} placeholder="Joined on (YYYY-MM-DD)" placeholderTextColor={colors.textMuted} value={tenantJoinedOn} onChangeText={setTenantJoinedOn} />
+            <DateField
+              value={tenantJoinedOn}
+              onChange={setTenantJoinedOn}
+              placeholder="Joined on"
+            />
             <TextInput style={styles.input} placeholder="Advance amount" placeholderTextColor={colors.textMuted} keyboardType="numeric" value={tenantAdvance} onChangeText={setTenantAdvance} />
             <TextInput style={styles.input} placeholder="Opening due amount" placeholderTextColor={colors.textMuted} keyboardType="numeric" value={tenantOpeningDue} onChangeText={setTenantOpeningDue} />
             {createTenantMutation.isError ? <Text style={styles.warningText}>{getErrorMessage(createTenantMutation.error)}</Text> : null}
@@ -529,7 +461,12 @@ export function DashboardScreen() {
       >
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Assign Caretaker</Text>
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, styles.modalHeaderTitle]}>Assign Caretaker</Text>
+              <Pressable style={styles.modalCloseButton} onPress={() => setIsCaretakerModalVisible(false)}>
+                <Text style={styles.modalCloseText}>X</Text>
+              </Pressable>
+            </View>
             <Text style={styles.modalMeta}>{selectedProperty?.name ?? ""}</Text>
             <TextInput style={styles.input} placeholder="Caretaker name (optional)" placeholderTextColor={colors.textMuted} value={caretakerName} onChangeText={setCaretakerName} />
             <TextInput style={styles.input} placeholder="Caretaker mobile" placeholderTextColor={colors.textMuted} keyboardType="phone-pad" value={caretakerPhone} onChangeText={setCaretakerPhone} />
@@ -599,17 +536,6 @@ const styles = StyleSheet.create({
     fontFamily: fonts.body,
     fontSize: 12,
   },
-  profileAction: {
-    borderRadius: 999,
-    backgroundColor: colors.primarySoft,
-    paddingHorizontal: 12,
-    paddingVertical: 9,
-  },
-  profileActionText: {
-    color: colors.primaryDark,
-    fontFamily: fonts.heading,
-    fontSize: 12,
-  },
   metricGrid: {
     gap: 10,
   },
@@ -642,7 +568,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 7,
   },
-  inlineActionText: {
+  emptyPropertyCta: {
+    borderRadius: radii.button,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceAlt,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  emptyPropertyText: {
     color: colors.primaryDark,
     fontFamily: fonts.heading,
     fontSize: 12,
@@ -752,6 +686,30 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     fontFamily: fonts.display,
     fontSize: 20,
+  },
+  modalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+  modalHeaderTitle: {
+    flex: 1,
+  },
+  modalCloseButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceAlt,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  modalCloseText: {
+    color: colors.textSecondary,
+    fontFamily: fonts.heading,
+    fontSize: 13,
   },
   modalMeta: {
     color: colors.textMuted,

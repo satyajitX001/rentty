@@ -13,6 +13,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { InfoCard } from "../components/InfoCard";
 import { Pill } from "../components/Pill";
 import { Screen } from "../components/Screen";
+import { DateField } from "../components/DateField";
 import {
   collectRent,
   getPayments,
@@ -330,13 +331,22 @@ export function TenantsScreen() {
       >
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Edit Tenant</Text>
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, styles.modalHeaderTitle]}>Edit Tenant</Text>
+              <Pressable style={styles.modalCloseButton} onPress={() => setIsEditModalVisible(false)}>
+                <Text style={styles.modalCloseText}>X</Text>
+              </Pressable>
+            </View>
             <TextInput style={styles.input} value={tenantName} onChangeText={setTenantName} placeholder="Tenant name" placeholderTextColor={colors.textMuted} />
             <TextInput style={styles.input} value={tenantAddress} onChangeText={setTenantAddress} placeholder="Address" placeholderTextColor={colors.textMuted} />
             <TextInput style={styles.input} value={tenantPhone} onChangeText={setTenantPhone} placeholder="Phone" placeholderTextColor={colors.textMuted} keyboardType="phone-pad" />
             <TextInput style={styles.input} value={tenantRent} onChangeText={setTenantRent} placeholder="Monthly rent" placeholderTextColor={colors.textMuted} keyboardType="numeric" />
             <TextInput style={styles.input} value={tenantRentDay} onChangeText={setTenantRentDay} placeholder="Due day" placeholderTextColor={colors.textMuted} keyboardType="numeric" />
-            <TextInput style={styles.input} value={tenantJoinedOn} onChangeText={setTenantJoinedOn} placeholder="Joined on YYYY-MM-DD" placeholderTextColor={colors.textMuted} />
+            <DateField
+              value={tenantJoinedOn}
+              onChange={setTenantJoinedOn}
+              placeholder="Joined on"
+            />
             <TextInput style={styles.input} value={tenantAdvance} onChangeText={setTenantAdvance} placeholder="Advance amount" placeholderTextColor={colors.textMuted} keyboardType="numeric" />
             <TextInput style={styles.input} value={tenantOpeningDue} onChangeText={setTenantOpeningDue} placeholder="Opening due amount" placeholderTextColor={colors.textMuted} keyboardType="numeric" />
             {updateTenantMutation.isError ? (
@@ -383,22 +393,25 @@ export function TenantsScreen() {
       >
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>
-              {paymentEditor ? "Edit Collection" : "Record Collection"}
-            </Text>
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, styles.modalHeaderTitle]}>
+                {paymentEditor ? "Edit Collection" : "Record Collection"}
+              </Text>
+              <Pressable style={styles.modalCloseButton} onPress={() => setIsDepositModalVisible(false)}>
+                <Text style={styles.modalCloseText}>X</Text>
+              </Pressable>
+            </View>
             <Text style={styles.modalMeta}>{selectedTenant?.fullName ?? ""}</Text>
             <TextInput style={styles.input} value={paymentAmount} onChangeText={setPaymentAmount} placeholder="Amount" placeholderTextColor={colors.textMuted} keyboardType="numeric" />
-            <TextInput
-              style={styles.input}
+            <DateField
               value={paymentDate}
-              onChangeText={(value) => {
+              onChange={(value) => {
                 setPaymentDate(value);
                 if (!paymentEditor) {
                   setPaymentDueMonth(inferDueMonth(value));
                 }
               }}
-              placeholder="Paid on YYYY-MM-DD"
-              placeholderTextColor={colors.textMuted}
+              placeholder="Paid on"
             />
             <TextInput style={styles.input} value={paymentDueMonth} onChangeText={setPaymentDueMonth} placeholder="Due month YYYY-MM" placeholderTextColor={colors.textMuted} />
             <View style={styles.modeRow}>
@@ -477,7 +490,12 @@ export function TenantsScreen() {
       >
         <View style={styles.modalBackdrop}>
           <View style={[styles.modalCard, styles.historyModal]}>
-            <Text style={styles.modalTitle}>Payment History</Text>
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, styles.modalHeaderTitle]}>Payment History</Text>
+              <Pressable style={styles.modalCloseButton} onPress={() => setIsHistoryModalVisible(false)}>
+                <Text style={styles.modalCloseText}>X</Text>
+              </Pressable>
+            </View>
             <Text style={styles.modalMeta}>{selectedTenant?.fullName ?? ""}</Text>
             {paymentsQuery.isPending ? <ActivityIndicator color={colors.primary} /> : null}
             <ScrollView showsVerticalScrollIndicator={false}>
@@ -520,12 +538,21 @@ export function TenantsScreen() {
       >
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Remove Tenant</Text>
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, styles.modalHeaderTitle]}>Remove Tenant</Text>
+              <Pressable style={styles.modalCloseButton} onPress={() => setIsRemoveModalVisible(false)}>
+                <Text style={styles.modalCloseText}>X</Text>
+              </Pressable>
+            </View>
             <Text style={styles.modalMeta}>
               This keeps history, payment records and property timeline intact.
             </Text>
             <TextInput style={styles.input} value={removeReason} onChangeText={setRemoveReason} placeholder="Reason for vacating" placeholderTextColor={colors.textMuted} />
-            <TextInput style={styles.input} value={vacatedOn} onChangeText={setVacatedOn} placeholder="Vacated on YYYY-MM-DD" placeholderTextColor={colors.textMuted} />
+            <DateField
+              value={vacatedOn}
+              onChange={setVacatedOn}
+              placeholder="Vacated on"
+            />
             {removeTenantMutation.isError ? (
               <Text style={styles.error}>{getErrorMessage(removeTenantMutation.error)}</Text>
             ) : null}
@@ -696,6 +723,30 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     fontFamily: fonts.display,
     fontSize: 20,
+  },
+  modalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+  modalHeaderTitle: {
+    flex: 1,
+  },
+  modalCloseButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceAlt,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  modalCloseText: {
+    color: colors.textSecondary,
+    fontFamily: fonts.heading,
+    fontSize: 13,
   },
   modalMeta: {
     color: colors.textMuted,

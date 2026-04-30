@@ -16,8 +16,10 @@ type AuthContextValue = {
   user: AuthUser | null;
   isAuthenticated: boolean;
   isHydrating: boolean;
+  themeMode: "light" | "dark";
   signIn: (payload: SessionPayload) => void;
   signOut: () => void;
+  toggleThemeMode: () => void;
 };
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -32,6 +34,7 @@ export function AuthProvider({ children }: Props) {
   const [refreshToken, setRefreshToken] = useState<string | null>(null);
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isHydrating, setIsHydrating] = useState(true);
+  const [themeMode, setThemeMode] = useState<"light" | "dark">("light");
 
   useEffect(() => {
     let isMounted = true;
@@ -84,6 +87,7 @@ export function AuthProvider({ children }: Props) {
       user,
       isAuthenticated: Boolean(accessToken),
       isHydrating,
+      themeMode,
       signIn: (payload) => {
         setAccessToken(payload.accessToken);
         setRefreshToken(payload.refreshToken);
@@ -101,9 +105,12 @@ export function AuthProvider({ children }: Props) {
         setUser(null);
         clearAuthTokens();
         void clearSessionStorage();
-      }
+      },
+      toggleThemeMode: () => {
+        setThemeMode((current) => (current === "light" ? "dark" : "light"));
+      },
     }),
-    [accessToken, isHydrating, queryClient, refreshToken, user]
+    [accessToken, isHydrating, queryClient, refreshToken, themeMode, user]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -5,6 +5,14 @@ import { toArray } from "./normalizers";
 export type CreatePropertyPayload = {
   name: string;
   address: string;
+  type?: "hostels" | "flat" | "villa";
+  caretakerName?: string;
+  caretakerPhone?: string;
+  location?: string;
+  floors?: number;
+  rooms?: number;
+  flatSize?: "1BHK" | "2BHK" | "3BHK";
+  amenities?: string;
 };
 
 export type UpdatePropertyPayload = Partial<CreatePropertyPayload>;
@@ -31,6 +39,7 @@ function normalizeProperty(input: unknown): Property {
     id: String(raw.id ?? raw._id ?? ""),
     name: String(raw.name ?? ""),
     address: String(raw.address ?? ""),
+    type: raw.type === "hostels" || raw.type === "flat" || raw.type === "villa" ? raw.type : undefined,
     caretaker: raw.caretaker ? String(raw.caretaker) : undefined,
     caretakerPhone: raw.caretakerPhone ? String(raw.caretakerPhone) : undefined,
     occupancyStatus: status === "occupied" ? "occupied" : "available",

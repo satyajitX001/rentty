@@ -10,15 +10,21 @@
       "backgroundColor": "#0B3DFF"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.satyajit1201.rentokapp"
     },
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#0B3DFF"
-      }
+      },
+      "package": "com.satyajit1201.rentokapp"
     },
     "web": {
       "bundler": "metro"
-    }
+    },
+    "plugins": [
+      "@react-native-community/datetimepicker",
+      "expo-font"
+    ]
   }
 }

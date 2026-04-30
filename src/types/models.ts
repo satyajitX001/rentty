@@ -2,6 +2,7 @@ export type Property = {
   id: string;
   name: string;
   address: string;
+  type?: "hostels" | "flat" | "villa";
   caretaker?: string;
   caretakerPhone?: string;
   occupancyStatus?: "available" | "occupied";
