@@ -21,6 +21,7 @@ function parseInputDate(value: string) {
 
 export function DateField({ value, placeholder, onChange }: Props) {
   const [open, setOpen] = useState(false);
+  const [tempDate, setTempDate] = useState<Date>(parseInputDate(value));
   const pickerValue = useMemo(() => parseInputDate(value), [value]);
 
   const onPickerChange = (event: DateTimePickerEvent, selectedDate?: Date) => {
@@ -28,23 +29,53 @@ export function DateField({ value, placeholder, onChange }: Props) {
       setOpen(false);
     }
     if (event.type === "dismissed" || !selectedDate) return;
-    onChange(toISODate(selectedDate));
+
+    if (Platform.OS === "ios") {
+      setTempDate(selectedDate);
+    } else {
+      onChange(toISODate(selectedDate));
+    }
+  };
+
+  const handleConfirm = () => {
+    onChange(toISODate(tempDate));
+    setOpen(false);
+  };
+
+  const handleCancel = () => {
+    setOpen(false);
+    setTempDate(pickerValue);
   };
 
   return (
     <View style={styles.container}>
-      <Pressable style={styles.field} onPress={() => setOpen(true)}>
+      <Pressable style={styles.field} onPress={() => {
+        setTempDate(pickerValue);
+        setOpen(true);
+      }}>
         <Text style={value ? styles.valueText : styles.placeholderText}>
           {value || placeholder}
         </Text>
       </Pressable>
       {open ? (
-        <DateTimePicker
-          value={pickerValue}
-          mode="date"
-          display={Platform.OS === "ios" ? "spinner" : "default"}
-          onChange={onPickerChange}
-        />
+        <View style={styles.pickerContainer}>
+          <DateTimePicker
+            value={Platform.OS === "ios" ? tempDate : pickerValue}
+            mode="date"
+            display={Platform.OS === "ios" ? "spinner" : "default"}
+            onChange={onPickerChange}
+          />
+          {Platform.OS === "ios" ? (
+            <View style={styles.buttonRow}>
+              <Pressable style={styles.cancelButton} onPress={handleCancel}>
+                <Text style={styles.cancelText}>Cancel</Text>
+              </Pressable>
+              <Pressable style={styles.confirmButton} onPress={handleConfirm}>
+                <Text style={styles.confirmText}>Confirm</Text>
+              </Pressable>
+            </View>
+          ) : null}
+        </View>
       ) : null}
     </View>
   );
@@ -72,6 +103,44 @@ const styles = StyleSheet.create({
   placeholderText: {
     color: colors.textMuted,
     fontFamily: fonts.body,
+    fontSize: 14,
+  },
+  pickerContainer: {
+    backgroundColor: colors.surface,
+    borderRadius: radii.card,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 12,
+    marginTop: 4,
+  },
+  buttonRow: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    gap: 12,
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  cancelButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: radii.button,
+  },
+  cancelText: {
+    color: colors.textSecondary,
+    fontFamily: fonts.heading,
+    fontSize: 14,
+  },
+  confirmButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: radii.button,
+    backgroundColor: colors.primary,
+  },
+  confirmText: {
+    color: "#FFFFFF",
+    fontFamily: fonts.heading,
     fontSize: 14,
   },
 });

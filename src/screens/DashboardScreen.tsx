@@ -181,6 +181,10 @@ export function DashboardScreen() {
     navigation.navigate("PropertyForm");
   };
 
+  const getPropertyCardStyle = (status: Property["occupancyStatus"]) => {
+    return status === "occupied" ? styles.propertyCardOccupied : styles.propertyCardAvailable;
+  };
+
   const openPropertyDetail = (property: Property) => {
     setSelectedProperty(property);
     setCaretakerName(property.caretaker ?? "");
@@ -197,25 +201,7 @@ export function DashboardScreen() {
   }
 
   return (
-    <Screen title="RentOk Dashboard" subtitle="Operations home for owner and caretaker">
-      <LinearGradient colors={["#FFFFFF", "#EFF5FF"]} style={styles.profileShell}>
-        <View style={styles.profileBadge}>
-          <Text style={styles.profileBadgeText}>{initials(user?.name)}</Text>
-        </View>
-        <View style={styles.profileInfo}>
-          <Text style={styles.profileName}>{user?.name ?? "RentOk User"}</Text>
-          <Text style={styles.profileMeta}>
-            {(user?.role ?? "caretaker").toUpperCase()} | {summary.totalProperties} properties under watch
-          </Text>
-        </View>
-      </LinearGradient>
-
-      {firstError ? (
-        <InfoCard title="Network Notice">
-          <Text style={styles.warningText}>{getErrorMessage(firstError)}</Text>
-        </InfoCard>
-      ) : null}
-
+    <Screen title="RentOk Dashboard" subtitle="Operations home for owner and caretaker" showHeader={false}>
       <View style={styles.metricGrid}>
         <LinearGradient colors={["#2B66FF", "#173FAF"]} style={styles.heroMetric}>
           <Text style={styles.heroMetricLabel}>Pending Dues</Text>
@@ -223,8 +209,6 @@ export function DashboardScreen() {
           <Text style={styles.heroMetricSub}>Keep this low with timely follow-ups.</Text>
         </LinearGradient>
         <InfoCard title="Collection This Month" value={currency(summary.monthCollection)} style={styles.metricCard} />
-        <InfoCard title="Occupied" value={`${summary.occupiedProperties}`} style={styles.metricCard} />
-        <InfoCard title="Available" value={`${summary.availableProperties}`} style={styles.metricCard} />
       </View>
 
       <InfoCard
@@ -237,40 +221,26 @@ export function DashboardScreen() {
           ) : undefined
         }
       >
-        {featuredProperties.length === 0 ? (
-          <Pressable style={styles.emptyPropertyCta} onPress={openCreateProperty}>
-            <Text style={styles.emptyPropertyText}>No properties yet. Tap here to add one.</Text>
-          </Pressable>
-        ) : null}
-        {featuredProperties.map((property) => (
-          <Pressable
-            key={property.id}
-            style={styles.propertyRow}
-            onPress={() => openPropertyDetail(property)}
-          >
-            <View style={styles.flexOne}>
-              <Text style={styles.propertyTitle}>{property.name}</Text>
-              <Text style={styles.propertyMeta}>{property.address}</Text>
-              <Text style={styles.propertyMeta}>
-                Caretaker: {property.caretakerPhone ?? "Not assigned"}
-              </Text>
-            </View>
-            <View style={styles.propertySide}>
-              <Pill
-                label={(property.occupancyStatus ?? "available").toUpperCase()}
-                tone={(property.occupancyStatus ?? "available") === "occupied" ? "warning" : "success"}
-              />
-              {user?.role === "owner" ? (
-                <Pressable
-                  style={styles.editPill}
-                  onPress={() => navigation.navigate("PropertyForm", { property })}
-                >
-                  <Text style={styles.editPillText}>Edit</Text>
-                </Pressable>
-              ) : null}
-            </View>
-          </Pressable>
-        ))}
+        <View style={styles.propertyGrid}>
+          {featuredProperties.length === 0 ? (
+            <Pressable style={styles.emptyPropertyCta} onPress={openCreateProperty}>
+              <Text style={styles.emptyPropertyText}>No properties yet. Tap here to add one.</Text>
+            </Pressable>
+          ) : null}
+          {featuredProperties.map((property) => (
+            <Pressable
+              key={property.id}
+              style={[styles.propertyCard, getPropertyCardStyle(property.occupancyStatus)]}
+              onPress={() => navigation.navigate("PropertyActions", { property })}
+            >
+              <View style={styles.propertyCardHeader}>
+                <Text style={styles.propertyName} numberOfLines={1}>{property.name}</Text>
+                <Ionicons name="pencil" size={14} color={colors.textMuted} />
+              </View>
+              <Text style={styles.propertyLocation} numberOfLines={1}>{property.address}</Text>
+            </Pressable>
+          ))}
+        </View>
       </InfoCard>
 
       <InfoCard title="Operations Pulse">
@@ -662,6 +632,44 @@ const styles = StyleSheet.create({
   warningText: {
     color: colors.warning,
     fontFamily: fonts.heading,
+    fontSize: 12,
+  },
+  propertyGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+  },
+  propertyCardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  propertyCard: {
+    width: "48%",
+    borderRadius: radii.card,
+    padding: 12,
+    minHeight: 80,
+    justifyContent: "center",
+  },
+  propertyCardOccupied: {
+    backgroundColor: "#FFF8E7",
+    borderWidth: 1,
+    borderColor: "#FFD966",
+  },
+  propertyCardAvailable: {
+    backgroundColor: "#E8F5E9",
+    borderWidth: 1,
+    borderColor: "#81C784",
+  },
+  propertyName: {
+    color: colors.textPrimary,
+    fontFamily: fonts.heading,
+    fontSize: 14,
+    marginBottom: 4,
+  },
+  propertyLocation: {
+    color: colors.textMuted,
+    fontFamily: fonts.body,
     fontSize: 12,
   },
   modalBackdrop: {

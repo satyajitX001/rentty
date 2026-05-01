@@ -9,6 +9,9 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { useNavigation } from "@react-navigation/native";
+import { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { Ionicons } from "@expo/vector-icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { InfoCard } from "../components/InfoCard";
 import { Pill } from "../components/Pill";
@@ -26,7 +29,9 @@ import {
   removeTenant,
   updateTenant,
 } from "../services/api/tenantService";
+import { AppStackParamList } from "../navigation/AppStackNavigator";
 import { colors, fonts, radii } from "../theme/tokens";
+import { scale, verticalScale, moderateScale } from "../utils/scale";
 import { Payment, Property, Tenant } from "../types/models";
 
 const money = (value: number) => `INR ${value.toLocaleString("en-IN")}`;
@@ -48,8 +53,11 @@ function inferDueMonth(dateInput: string) {
 
 export function TenantsScreen() {
   const queryClient = useQueryClient();
+  const navigation = useNavigation<NativeStackNavigationProp<AppStackParamList>>();
   const tenantsQuery = useQuery({ queryKey: queryKeys.tenants.list, queryFn: () => getTenants() });
   const propertiesQuery = useQuery({ queryKey: queryKeys.properties.list, queryFn: getProperties });
+
+  const [expandedPropertyId, setExpandedPropertyId] = useState<string | null>(null);
 
   const [selectedTenant, setSelectedTenant] = useState<Tenant | null>(null);
   const [paymentEditor, setPaymentEditor] = useState<Payment | null>(null);
@@ -142,9 +150,28 @@ export function TenantsScreen() {
     return map;
   }, [propertiesQuery.data]);
 
-  const tenantList = tenantsQuery.data ?? [];
-  const dueCount = tenantList.filter((tenant) => tenant.dueAmount > 0).length;
-  const totalDue = tenantList.reduce((sum, tenant) => sum + tenant.dueAmount, 0);
+  const properties = propertiesQuery.data ?? [];
+  const allTenants = tenantsQuery.data ?? [];
+
+  const tenantsByProperty = useMemo(() => {
+    const map = new Map<string, Tenant[]>();
+    properties.forEach((property) => {
+      map.set(property.id, []);
+    });
+
+    allTenants.forEach((tenant) => {
+      const existing = map.get(tenant.propertyId);
+      if (existing) {
+        existing.push(tenant);
+      }
+    });
+
+    return map;
+  }, [allTenants, properties]);
+
+  const totalTenantCount = allTenants.length;
+  const dueCount = allTenants.filter((tenant) => tenant.dueAmount > 0).length;
+  const totalDue = allTenants.reduce((sum, tenant) => sum + tenant.dueAmount, 0);
 
   const canSaveTenant =
     Boolean(selectedTenant?.id) &&
@@ -220,6 +247,13 @@ export function TenantsScreen() {
     setIsRemoveModalVisible(true);
   };
 
+  const navigateToTenantDetails = (tenant: Tenant) => {
+    const property = propertiesById.get(tenant.propertyId);
+    if (property) {
+      navigation.navigate("TenantDetails", { tenant, property });
+    }
+  };
+
   if (tenantsQuery.isPending || propertiesQuery.isPending) {
     return (
       <Screen title="Tenant Management" subtitle="People, payments and property occupancy">
@@ -243,85 +277,75 @@ export function TenantsScreen() {
   return (
     <Screen
       title="Tenant Management"
-      subtitle={`${tenantList.length} tenants | ${dueCount} with dues | ${money(totalDue)} pending`}
+      subtitle={`${totalTenantCount} tenants | ${dueCount} with dues | ${money(totalDue)} pending`}
     >
-      <InfoCard title="Tenant Overview">
-        <View style={styles.summaryRow}>
-          <View style={styles.summaryItem}>
-            <Text style={styles.summaryValue}>{tenantList.length}</Text>
-            <Text style={styles.summaryLabel}>Active Records</Text>
-          </View>
-          <View style={styles.summaryItem}>
-            <Text style={styles.summaryValue}>{dueCount}</Text>
-            <Text style={styles.summaryLabel}>Need Collection</Text>
-          </View>
-          <View style={styles.summaryItem}>
-            <Text style={styles.summaryValue}>{money(totalDue)}</Text>
-            <Text style={styles.summaryLabel}>Outstanding</Text>
-          </View>
+      {properties.length === 0 ? (
+        <InfoCard title="No Properties Found">
+          <Text style={styles.emptyText}>Add a property first to view associated tenants.</Text>
+        </InfoCard>
+      ) : (
+        <View style={styles.accordionList}>
+          {properties.map((property) => {
+            const propertyTenants = tenantsByProperty.get(property.id) ?? [];
+            const isOpen = expandedPropertyId === property.id;
+            const propertyDue = propertyTenants.reduce((sum, tenant) => sum + tenant.dueAmount, 0);
+
+            return (
+              <View key={property.id} style={styles.accordionSection}>
+                <Pressable
+                  style={styles.accordionHeader}
+                  onPress={() =>
+                    setExpandedPropertyId((current) => (current === property.id ? null : property.id))
+                  }
+                >
+                  <View style={styles.flexOne}>
+                    <Text style={styles.accordionTitle}>{property.name}</Text>
+                    <Text style={styles.accordionMeta}>
+                      {propertyTenants.length} tenants | Due {money(propertyDue)}
+                    </Text>
+                  </View>
+                  <Ionicons
+                    name={isOpen ? "chevron-up" : "chevron-down"}
+                    size={20}
+                    color={colors.textMuted}
+                  />
+                </Pressable>
+
+                {isOpen ? (
+                  <View style={styles.accordionBody}>
+                    {propertyTenants.length === 0 ? (
+                      <Text style={styles.emptyText}>No tenants assigned to this property yet.</Text>
+                    ) : (
+                      propertyTenants.map((tenant) => (
+                        <View key={tenant.id} style={styles.tenantCard}>
+                          <View style={styles.tenantHeader}>
+                            <View style={styles.tenantInfo}>
+                              <Text style={styles.tenantName}>{tenant.fullName}</Text>
+                              <Text style={[styles.tenantDue, tenant.dueAmount > 0 ? styles.danger : styles.success]}>
+                                Current Due: {money(tenant.dueAmount)}
+                              </Text>
+                            </View>
+                            <Pill
+                              label={tenant.status.toUpperCase()}
+                              tone={tenant.status === "active" ? "success" : "warning"}
+                            />
+                          </View>
+                          <Pressable
+                            style={styles.moreDetailsButton}
+                            onPress={() => navigateToTenantDetails(tenant)}
+                          >
+                            <Text style={styles.moreDetailsText}>More Details</Text>
+                          </Pressable>
+                        </View>
+                      ))
+                    )}
+                  </View>
+                ) : null}
+              </View>
+            );
+          })}
         </View>
-      </InfoCard>
-
-      {tenantList.map((tenant) => {
-        const property = propertiesById.get(tenant.propertyId);
-
-        return (
-          <InfoCard
-            key={tenant.id}
-            title={tenant.fullName}
-            rightNode={
-              <Pill
-                label={tenant.status.toUpperCase()}
-                tone={tenant.status === "active" ? "success" : "warning"}
-              />
-            }
-          >
-            <View style={styles.row}>
-              <Text style={styles.label}>Property</Text>
-              <Text style={styles.value}>{property?.name ?? "Unknown property"}</Text>
-            </View>
-            <View style={styles.row}>
-              <Text style={styles.label}>Phone</Text>
-              <Text style={styles.value}>{tenant.phone}</Text>
-            </View>
-            <View style={styles.row}>
-              <Text style={styles.label}>Address</Text>
-              <Text style={styles.value}>{tenant.fullAddress}</Text>
-            </View>
-            <View style={styles.row}>
-              <Text style={styles.label}>Rent / Due Day</Text>
-              <Text style={styles.value}>
-                {money(tenant.monthlyRent)} / {tenant.rentDueDay}
-              </Text>
-            </View>
-            <View style={styles.row}>
-              <Text style={styles.label}>Current Due</Text>
-              <Text
-                style={[
-                  styles.value,
-                  tenant.dueAmount > 0 ? styles.danger : styles.success,
-                ]}
-              >
-                {money(tenant.dueAmount)}
-              </Text>
-            </View>
-            <View style={styles.actionRow}>
-              <Pressable style={styles.primaryButton} onPress={() => openDepositModal(tenant)}>
-                <Text style={styles.primaryButtonText}>Deposit</Text>
-              </Pressable>
-              <Pressable style={styles.secondaryButton} onPress={() => openHistoryModal(tenant)}>
-                <Text style={styles.secondaryButtonText}>History</Text>
-              </Pressable>
-              <Pressable style={styles.secondaryButton} onPress={() => openEditTenant(tenant)}>
-                <Text style={styles.secondaryButtonText}>Edit</Text>
-              </Pressable>
-            </View>
-            <Pressable style={styles.removeButton} onPress={() => openRemoveModal(tenant)}>
-              <Text style={styles.removeText}>Remove Tenant</Text>
-            </Pressable>
-          </InfoCard>
-        );
-      })}
+      )}
 
       <Modal
         visible={isEditModalVisible}
@@ -588,22 +612,22 @@ const styles = StyleSheet.create({
   summaryRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    gap: 10,
+    gap: scale(10),
   },
   summaryItem: {
     flex: 1,
-    borderRadius: 16,
+    borderRadius: moderateScale(16),
     backgroundColor: colors.surfaceAlt,
-    padding: 12,
-    gap: 4,
+    padding: moderateScale(12),
+    gap: scale(4),
   },
   summaryValue: {
-    fontSize: 18,
+    fontSize: moderateScale(18),
     color: colors.textPrimary,
     fontFamily: fonts.display,
   },
   summaryLabel: {
-    fontSize: 11,
+    fontSize: moderateScale(11),
     color: colors.textMuted,
     fontFamily: fonts.body,
   },
@@ -611,81 +635,81 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    gap: 10,
-    paddingVertical: 2,
+    gap: scale(10),
+    paddingVertical: verticalScale(2),
   },
   label: {
     color: colors.textMuted,
-    fontSize: 12,
+    fontSize: moderateScale(12),
     fontFamily: fonts.body,
   },
   value: {
     color: colors.textPrimary,
-    fontSize: 13,
+    fontSize: moderateScale(13),
     fontFamily: fonts.heading,
     flexShrink: 1,
     textAlign: "right",
   },
   actionRow: {
     flexDirection: "row",
-    gap: 8,
-    marginTop: 6,
+    gap: scale(8),
+    marginTop: verticalScale(6),
   },
   primaryButton: {
     flex: 1,
-    borderRadius: radii.button,
+    borderRadius: moderateScale(radii.button),
     backgroundColor: colors.primary,
-    minHeight: 42,
+    minHeight: verticalScale(42),
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 12,
+    paddingHorizontal: scale(12),
   },
   primaryButtonText: {
     color: "#FFFFFF",
     fontFamily: fonts.heading,
-    fontSize: 13,
+    fontSize: moderateScale(13),
   },
   secondaryButton: {
     flex: 1,
-    borderRadius: radii.button,
+    borderRadius: moderateScale(radii.button),
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.surfaceAlt,
-    minHeight: 42,
+    minHeight: verticalScale(42),
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 12,
+    paddingHorizontal: scale(12),
   },
   secondaryButtonText: {
     color: colors.primaryDark,
     fontFamily: fonts.heading,
-    fontSize: 13,
+    fontSize: moderateScale(13),
   },
   removeButton: {
-    marginTop: 8,
-    borderRadius: radii.button,
+    marginTop: verticalScale(8),
+    borderRadius: moderateScale(radii.button),
     borderWidth: 1,
     borderColor: colors.danger,
     backgroundColor: "#FFF3F3",
-    minHeight: 40,
+    minHeight: verticalScale(40),
     alignItems: "center",
     justifyContent: "center",
   },
   removeButtonInline: {
     flex: 1,
-    borderRadius: radii.button,
+    borderRadius: moderateScale(radii.button),
     borderWidth: 1,
     borderColor: colors.danger,
     backgroundColor: "#FFF3F3",
-    minHeight: 42,
+    minHeight: verticalScale(42),
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 12,
+    paddingHorizontal: scale(12),
   },
   removeText: {
     color: colors.danger,
     fontFamily: fonts.heading,
-    fontSize: 13,
+    fontSize: moderateScale(13),
   },
   danger: {
     color: colors.danger,
@@ -696,22 +720,22 @@ const styles = StyleSheet.create({
   error: {
     color: colors.warning,
     fontFamily: fonts.heading,
-    fontSize: 12,
+    fontSize: moderateScale(12),
   },
   buttonDisabled: {
     opacity: 0.6,
   },
   modalBackdrop: {
     flex: 1,
-    backgroundColor: "rgba(7,16,37,0.45)",
+    backgroundColor: "rgba(9,18,39,0.45)",
     justifyContent: "flex-end",
   },
   modalCard: {
     backgroundColor: colors.surface,
-    borderTopLeftRadius: radii.card,
-    borderTopRightRadius: radii.card,
-    padding: 16,
-    gap: 10,
+    borderTopLeftRadius: moderateScale(radii.card),
+    borderTopRightRadius: moderateScale(radii.card),
+    padding: moderateScale(16),
+    gap: scale(10),
     borderWidth: 1,
     borderColor: colors.border,
     maxHeight: "88%",
@@ -722,21 +746,21 @@ const styles = StyleSheet.create({
   modalTitle: {
     color: colors.textPrimary,
     fontFamily: fonts.display,
-    fontSize: 20,
+    fontSize: moderateScale(20),
   },
   modalHeader: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    gap: 10,
+    gap: scale(10),
   },
   modalHeaderTitle: {
     flex: 1,
   },
   modalCloseButton: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: scale(34),
+    height: verticalScale(34),
+    borderRadius: moderateScale(17),
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.surfaceAlt,
@@ -746,40 +770,40 @@ const styles = StyleSheet.create({
   modalCloseText: {
     color: colors.textSecondary,
     fontFamily: fonts.heading,
-    fontSize: 13,
+    fontSize: moderateScale(13),
   },
   modalMeta: {
     color: colors.textMuted,
     fontFamily: fonts.body,
-    fontSize: 12,
+    fontSize: moderateScale(12),
   },
   input: {
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: radii.button,
+    borderRadius: moderateScale(radii.button),
     backgroundColor: "#FFFFFF",
-    paddingHorizontal: 12,
-    paddingVertical: 11,
+    paddingHorizontal: scale(12),
+    paddingVertical: verticalScale(11),
     color: colors.textPrimary,
     fontFamily: fonts.body,
-    fontSize: 14,
+    fontSize: moderateScale(14),
   },
   modalActions: {
     flexDirection: "row",
-    gap: 8,
+    gap: scale(8),
     justifyContent: "flex-end",
   },
   modeRow: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 8,
+    gap: scale(8),
   },
   modeChip: {
     borderRadius: 999,
     borderWidth: 1,
     borderColor: colors.border,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingHorizontal: scale(12),
+    paddingVertical: verticalScale(8),
     backgroundColor: colors.surfaceAlt,
   },
   modeChipActive: {
@@ -789,7 +813,7 @@ const styles = StyleSheet.create({
   modeChipText: {
     color: colors.textSecondary,
     fontFamily: fonts.heading,
-    fontSize: 12,
+    fontSize: moderateScale(12),
   },
   modeChipTextActive: {
     color: colors.primaryDark,
@@ -797,12 +821,12 @@ const styles = StyleSheet.create({
   historyItem: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: scale(8),
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 14,
-    padding: 12,
-    marginBottom: 8,
+    borderRadius: moderateScale(14),
+    padding: moderateScale(12),
+    marginBottom: verticalScale(8),
     backgroundColor: colors.surfaceAlt,
   },
   flexOne: {
@@ -811,17 +835,90 @@ const styles = StyleSheet.create({
   historyTitle: {
     color: colors.textPrimary,
     fontFamily: fonts.heading,
-    fontSize: 14,
+    fontSize: moderateScale(14),
   },
   historyMeta: {
     color: colors.textMuted,
     fontFamily: fonts.body,
-    fontSize: 12,
+    fontSize: moderateScale(12),
   },
   emptyText: {
     color: colors.textMuted,
     fontFamily: fonts.body,
-    fontSize: 13,
-    paddingVertical: 10,
+    fontSize: moderateScale(13),
+    paddingVertical: verticalScale(10),
+  },
+  accordionList: {
+    marginTop: verticalScale(6),
+    gap: verticalScale(10),
+  },
+  accordionSection: {
+    borderRadius: moderateScale(radii.card),
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    overflow: "hidden",
+  },
+  accordionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: scale(10),
+    paddingHorizontal: scale(16),
+    paddingVertical: verticalScale(14),
+  },
+  accordionTitle: {
+    fontFamily: fonts.heading,
+    fontSize: moderateScale(14),
+    color: colors.textPrimary,
+  },
+  accordionMeta: {
+    fontFamily: fonts.body,
+    fontSize: moderateScale(12),
+    color: colors.textMuted,
+  },
+  accordionBody: {
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    padding: moderateScale(12),
+    gap: verticalScale(10),
+  },
+  tenantCard: {
+    backgroundColor: colors.surface,
+    borderRadius: moderateScale(14),
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: moderateScale(14),
+  },
+  tenantHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: verticalScale(12),
+  },
+  tenantInfo: {
+    flex: 1,
+    marginRight: scale(12),
+  },
+  tenantName: {
+    fontFamily: fonts.heading,
+    fontSize: moderateScale(16),
+    color: colors.textPrimary,
+    marginBottom: verticalScale(4),
+  },
+  tenantDue: {
+    fontFamily: fonts.body,
+    fontSize: moderateScale(14),
+  },
+  moreDetailsButton: {
+    backgroundColor: colors.primarySoft,
+    borderRadius: moderateScale(radii.button),
+    paddingVertical: verticalScale(10),
+    alignItems: "center",
+  },
+  moreDetailsText: {
+    color: colors.primaryDark,
+    fontFamily: fonts.heading,
+    fontSize: moderateScale(14),
   },
 });

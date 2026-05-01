@@ -8,16 +8,19 @@ type Props = {
   title: string;
   subtitle?: string;
   children: ReactNode;
+  showHeader?: boolean;
 };
 
-export function Screen({ title, subtitle, children }: Props) {
+export function Screen({ title, subtitle, children, showHeader = true }: Props) {
   return (
     <SafeAreaView style={styles.safe}>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        {showHeader ? (
         <LinearGradient colors={[colors.heroStart, colors.heroEnd]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.headerWrap}>
           <Text style={styles.title}>{title}</Text>
           {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
         </LinearGradient>
+        ) : null}
         <View style={styles.body}>{children}</View>
       </ScrollView>
     </SafeAreaView>
@@ -34,7 +37,6 @@ const styles = StyleSheet.create({
     paddingBottom: 30
   },
   headerWrap: {
-    marginTop: 6,
     borderRadius: 20,
     paddingHorizontal: 16,
     paddingVertical: 16,
@@ -52,7 +54,7 @@ const styles = StyleSheet.create({
     fontFamily: fonts.body
   },
   body: {
-    marginTop: 14,
+    // marginTop: 14,
     gap: 12
   }
 });

@@ -8,9 +8,12 @@ import {
   createDrawerNavigator,
 } from "@react-navigation/drawer";
 import { Ionicons } from "@expo/vector-icons";
+import { useQuery } from "@tanstack/react-query";
 import { RootNavigator } from "./RootNavigator";
 import { useAuth } from "../store/AuthContext";
 import { colors, fonts, radii } from "../theme/tokens";
+import { getDashboardSummary } from "../services/api/dashboardService";
+import { queryKeys } from "../services/api/queryKeys";
 
 export type AppDrawerParamList = {
   Home: undefined;
@@ -30,6 +33,8 @@ function initials(name?: string) {
 
 function CustomDrawerContent(props: DrawerContentComponentProps) {
   const { user, signOut, themeMode, toggleThemeMode } = useAuth();
+  const summaryQuery = useQuery({ queryKey: queryKeys.dashboard.summary, queryFn: getDashboardSummary });
+  const summary = summaryQuery.data ?? { totalProperties: 0, occupiedProperties: 0, availableProperties: 0 };
 
   return (
     <DrawerContentScrollView {...props} contentContainerStyle={styles.drawerContainer}>
@@ -40,10 +45,18 @@ function CustomDrawerContent(props: DrawerContentComponentProps) {
         <View style={styles.profileMeta}>
           <Text style={styles.profileName}>{user?.name ?? "RentOk User"}</Text>
           <Text style={styles.profileSub}>{(user?.role ?? "caretaker").toUpperCase()}</Text>
-          <View style={styles.tagRow}>
-            <Text style={styles.tag}>Tag: VERIFIED</Text>
-            <Text style={styles.tag}>Role: {(user?.role ?? "caretaker").toUpperCase()}</Text>
-          </View>
+          <Text style={styles.propertyCount}>{summary.totalProperties} Properties</Text>
+        </View>
+      </View>
+
+      <View style={styles.statsRow}>
+        <View style={[styles.statBox, styles.occupiedBox]}>
+          <Text style={styles.statValue}>{summary.occupiedProperties}</Text>
+          <Text style={styles.statLabel}>Occupied</Text>
+        </View>
+        <View style={[styles.statBox, styles.availableBox]}>
+          <Text style={styles.statValue}>{summary.availableProperties}</Text>
+          <Text style={styles.statLabel}>Available</Text>
         </View>
       </View>
 
@@ -137,20 +150,44 @@ const styles = StyleSheet.create({
     fontFamily: fonts.body,
     fontSize: 12,
   },
-  tagRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 6,
+  propertyCount: {
+    color: colors.primary,
+    fontFamily: fonts.heading,
+    fontSize: 11,
     marginTop: 2,
   },
-  tag: {
-    color: colors.primaryDark,
-    backgroundColor: colors.primarySoft,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 999,
-    fontFamily: fonts.heading,
-    fontSize: 10,
+  statsRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginHorizontal: 12,
+    marginBottom: 18,
+  },
+  statBox: {
+    flex: 1,
+    borderRadius: 12,
+    padding: 12,
+    alignItems: "center",
+  },
+  occupiedBox: {
+    backgroundColor: "#FFF8E7",
+    borderWidth: 1,
+    borderColor: "#FFD966",
+  },
+  availableBox: {
+    backgroundColor: "#E8F5E9",
+    borderWidth: 1,
+    borderColor: "#81C784",
+  },
+  statValue: {
+    color: colors.textPrimary,
+    fontFamily: fonts.display,
+    fontSize: 18,
+  },
+  statLabel: {
+    color: colors.textMuted,
+    fontFamily: fonts.body,
+    fontSize: 11,
+    marginTop: 2,
   },
   settingsBlock: {
     marginTop: "auto",
