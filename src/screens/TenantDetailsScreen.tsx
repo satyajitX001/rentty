@@ -41,7 +41,9 @@ type Props = {
 
 const money = (value: number) => `INR ${value.toLocaleString("en-IN")}`;
 
-const paymentModes: Payment["mode"][] = ["UPI", "CASH", "BANK_TRANSFER", "CARD"];
+type PaymentMode = NonNullable<Payment["mode"]>;
+
+const paymentModes: PaymentMode[] = ["UPI", "CASH", "BANK_TRANSFER", "CARD"];
 
 function getErrorMessage(error: unknown) {
   if (error instanceof Error) return error.message;
@@ -76,7 +78,7 @@ export function TenantDetailsScreen({ route }: Props) {
   const [paymentDueMonth, setPaymentDueMonth] = useState("");
   const [paymentUtr, setPaymentUtr] = useState("");
   const [paymentNotes, setPaymentNotes] = useState("");
-  const [paymentMode, setPaymentMode] = useState(paymentModes[0]);
+  const [paymentMode, setPaymentMode] = useState<PaymentMode>("UPI");
   const [paymentEditor, setPaymentEditor] = useState<Payment | null>(null);
 
   // Edit tenant form state
@@ -200,7 +202,7 @@ export function TenantDetailsScreen({ route }: Props) {
     setPaymentAmount(String(payment.amount));
     setPaymentDate(toDateInput(payment.paidOn));
     setPaymentDueMonth(payment.dueMonth);
-    setPaymentMode(payment.mode);
+    setPaymentMode(payment.mode ?? "UPI");
     setPaymentUtr(payment.utr ?? "");
     setPaymentNotes(payment.notes ?? "");
     setIsHistoryModalVisible(false);
@@ -326,7 +328,7 @@ export function TenantDetailsScreen({ route }: Props) {
                       payload: { amount: Number(paymentAmount), paidOn: paymentDate.trim(), dueMonth: paymentDueMonth.trim(), mode: paymentMode, utr: paymentUtr.trim() || undefined, notes: paymentNotes.trim() || undefined },
                     });
                   } else {
-                    collectPaymentMutation.mutate({ tenantId: tenant.id, propertyId: tenant.propertyId, amount: Number(paymentAmount), paidOn: paymentDate.trim(), dueMonth: paymentDueMonth.trim(), mode: paymentMode, utr: paymentUtr.trim() || undefined, notes: paymentNotes.trim() || undefined });
+                    collectPaymentMutation.mutate({ tenantId: tenant.id, amount: Number(paymentAmount), paidOn: paymentDate.trim(), dueMonth: paymentDueMonth.trim(), mode: paymentMode, utr: paymentUtr.trim() || undefined, notes: paymentNotes.trim() || undefined });
                   }
                 }}
               >

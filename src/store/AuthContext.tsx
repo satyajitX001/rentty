@@ -19,6 +19,7 @@ type AuthContextValue = {
   themeMode: "light" | "dark";
   signIn: (payload: SessionPayload) => void;
   signOut: () => void;
+  updateUser: (user: AuthUser) => void;
   toggleThemeMode: () => void;
 };
 
@@ -105,6 +106,12 @@ export function AuthProvider({ children }: Props) {
         setUser(null);
         clearAuthTokens();
         void clearSessionStorage();
+      },
+      updateUser: (nextUser) => {
+        setUser(nextUser);
+        if (accessToken && refreshToken) {
+          void saveSession({ accessToken, refreshToken, user: nextUser });
+        }
       },
       toggleThemeMode: () => {
         setThemeMode((current) => (current === "light" ? "dark" : "light"));

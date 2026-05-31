@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { useMutation } from "@tanstack/react-query";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -15,6 +16,7 @@ export function LoginScreen() {
   const { signIn } = useAuth();
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
 
   const loginMutation = useMutation({
     mutationFn: login,
@@ -50,17 +52,26 @@ export function LoginScreen() {
         />
 
         <Text style={styles.label}>Password</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="Enter your password"
-          placeholderTextColor={colors.textMuted}
-          autoCapitalize="none"
-          secureTextEntry
-          value={password}
-          onChangeText={setPassword}
-        />
+        <View style={styles.passwordContainer}>
+          <TextInput
+            style={styles.passwordInput}
+            placeholder="Enter your password"
+            placeholderTextColor={colors.textMuted}
+            autoCapitalize="none"
+            secureTextEntry={!showPassword}
+            value={password}
+            onChangeText={setPassword}
+          />
+          <Pressable onPress={() => setShowPassword(!showPassword)} style={styles.eyeIcon}>
+            <Ionicons name={showPassword ? "eye-off" : "eye"} size={20} color={colors.textMuted} />
+          </Pressable>
+        </View>
 
         {loginMutation.isError ? <Text style={styles.error}>{loginMutation.error.message}</Text> : null}
+
+        <Pressable onPress={() => navigation.navigate("ForgotPassword")}>
+          <Text style={styles.forgotPasswordText}>Forgot password?</Text>
+        </Pressable>
 
         <Pressable
           style={[styles.primaryButton, !canSubmit && styles.buttonDisabled]}
@@ -134,6 +145,25 @@ const styles = StyleSheet.create({
     fontFamily: fonts.body,
     fontSize: 14
   },
+  passwordContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radii.button,
+    backgroundColor: "#FFFFFF"
+  },
+  passwordInput: {
+    flex: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 11,
+    color: colors.textPrimary,
+    fontFamily: fonts.body,
+    fontSize: 14
+  },
+  eyeIcon: {
+    paddingRight: 12
+  },
   primaryButton: {
     marginTop: 6,
     borderRadius: radii.button,
@@ -146,6 +176,12 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontFamily: fonts.heading,
     fontSize: 14
+  },
+  forgotPasswordText: {
+    color: colors.primary,
+    fontFamily: fonts.heading,
+    fontSize: 12,
+    alignSelf: "flex-end"
   },
   secondaryButton: {
     minHeight: 42,

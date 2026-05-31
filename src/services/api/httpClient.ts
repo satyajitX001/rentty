@@ -57,54 +57,6 @@ function normalizeHeaders(headers?: unknown): HeaderRecord {
   return {};
 }
 
-function shellEscape(value: string) {
-  return `'${value.replace(/'/g, `'"'"'`)}'`;
-}
-
-function serializeBodyForCurl(body: unknown) {
-  if (body === undefined || body === null) return null;
-  if (typeof body === "string") return body;
-
-  try {
-    return JSON.stringify(body);
-  } catch {
-    return String(body);
-  }
-}
-
-export function buildCurlCommand(config: AxiosRequestConfig, headers: HeaderRecord) {
-  const method = (config.method ?? "GET").toUpperCase();
-  const url = apiClient.getUri(config);
-  const parts = ["curl", "-X", method, shellEscape(url)];
-
-  Object.entries(headers).forEach(([key, value]) => {
-    parts.push("-H", shellEscape(`${key}: ${value}`));
-  });
-
-  const body = serializeBodyForCurl(config.data);
-  if (body) {
-    parts.push("--data-raw", shellEscape(body));
-  }
-
-  return parts.join(" ");
-}
-
-function logCurlRequest(config: AxiosRequestConfig, headers: HeaderRecord) {
-  const curl = buildCurlCommand(config, headers);
-  console.info(`[API cURL] ${curl}`);
-}
-
-function logApiError(config: AxiosRequestConfig | undefined, details: Record<string, unknown>) {
-  const method = (config?.method ?? "GET").toUpperCase();
-  const url = config ? apiClient.getUri(config) : "unknown-url";
-
-  console.error(`[API ERROR] ${method} ${url}`, {
-    ...details,
-    params: config?.params,
-    requestBody: config?.data
-  });
-}
-
 function unwrapEnvelope<T>(response: AxiosResponse<ApiEnvelope<T> | T>) {
   const payload = response.data;
 
@@ -180,7 +132,6 @@ apiClient.interceptors.request.use((config) => {
   }
 
   config.headers = headers as any;
-  logCurlRequest(config, headers);
 
   return config;
 });
@@ -196,13 +147,6 @@ apiClient.interceptors.response.use(
 
     const baseMessage = messageFromServer ?? error.message ?? "Request failed";
     const originalRequest = error.config as RetryRequestConfig | undefined;
-
-    logApiError(originalRequest, {
-      status,
-      message: baseMessage,
-      responsePayload: error.response?.data,
-      networkError: !error.response
-    });
 
     if (status === 401 && originalRequest && !originalRequest._retry && !isRefreshRequest(originalRequest.url)) {
       const currentRefresh = getRefreshToken();

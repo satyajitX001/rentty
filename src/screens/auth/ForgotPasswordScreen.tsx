@@ -1,64 +1,36 @@
 import React, { useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
 import { useMutation } from "@tanstack/react-query";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { register } from "../../services/api/authService";
+import { requestPasswordReset } from "../../services/api/authService";
 import type { AuthStackParamList } from "../../navigation/AuthStackNavigator";
-import { useAuth } from "../../store/AuthContext";
 import { colors, fonts, radii, shadows } from "../../theme/tokens";
 
-type AuthNavigation = NativeStackNavigationProp<AuthStackParamList, "SignUp">;
+type AuthNavigation = NativeStackNavigationProp<AuthStackParamList, "ForgotPassword">;
 
-export function SignUpScreen() {
+export function ForgotPasswordScreen() {
   const navigation = useNavigation<AuthNavigation>();
-  const { signIn } = useAuth();
-  const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
-  const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
 
-  const registerMutation = useMutation({
-    mutationFn: register,
-    onSuccess: (result) => {
-      if (result.token && result.refreshToken && result.user) {
-        signIn({
-          accessToken: result.token,
-          refreshToken: result.refreshToken,
-          user: result.user
-        });
-        return;
-      }
-
-      navigation.replace("Login");
+  const resetMutation = useMutation({
+    mutationFn: requestPasswordReset,
+    onSuccess: () => {
+      navigation.navigate("ResetPassword", { phone });
     }
   });
 
-  const canSubmit =
-    name.trim().length > 0 &&
-    phone.trim().length > 0 &&
-    password.trim().length >= 6 &&
-    !registerMutation.isPending;
+  const canSubmit = phone.trim().length > 0 && !resetMutation.isPending;
 
   return (
     <View style={styles.page}>
       <View style={styles.hero}>
         <Text style={styles.brand}>RentOk</Text>
-        <Text style={styles.title}>Create owner account</Text>
-        <Text style={styles.subtitle}>Caretakers are onboarded by owner from Property - Assign Caretaker.</Text>
+        <Text style={styles.title}>Forgot Password?</Text>
+        <Text style={styles.subtitle}>Enter your phone number to receive a reset code.</Text>
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.label}>Full Name</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="Satyajit Ray"
-          placeholderTextColor={colors.textMuted}
-          value={name}
-          onChangeText={setName}
-        />
-
         <Text style={styles.label}>Phone</Text>
         <TextInput
           style={styles.input}
@@ -70,44 +42,22 @@ export function SignUpScreen() {
           onChangeText={setPhone}
         />
 
-        <Text style={styles.label}>Password</Text>
-        <View style={styles.passwordContainer}>
-          <TextInput
-            style={styles.passwordInput}
-            placeholder="Minimum 6 characters"
-            placeholderTextColor={colors.textMuted}
-            secureTextEntry={!showPassword}
-            value={password}
-            onChangeText={setPassword}
-          />
-          <Pressable onPress={() => setShowPassword(!showPassword)} style={styles.eyeIcon}>
-            <Ionicons name={showPassword ? "eye-off" : "eye"} size={20} color={colors.textMuted} />
-          </Pressable>
-        </View>
-
-        {registerMutation.isError ? <Text style={styles.error}>{registerMutation.error.message}</Text> : null}
+        {resetMutation.isError ? <Text style={styles.error}>{resetMutation.error.message}</Text> : null}
 
         <Pressable
           style={[styles.primaryButton, !canSubmit && styles.buttonDisabled]}
-          onPress={() =>
-            registerMutation.mutate({
-              name: name.trim(),
-              phone: phone.trim(),
-              password,
-              role: "owner"
-            })
-          }
+          onPress={() => resetMutation.mutate(phone.trim())}
           disabled={!canSubmit}
         >
-          {registerMutation.isPending ? (
+          {resetMutation.isPending ? (
             <ActivityIndicator size="small" color="#FFFFFF" />
           ) : (
-            <Text style={styles.primaryButtonText}>Create Account</Text>
+            <Text style={styles.primaryButtonText}>Send Reset Code</Text>
           )}
         </Pressable>
 
-        <Pressable style={styles.secondaryButton} onPress={() => navigation.navigate("Login")}>
-          <Text style={styles.secondaryButtonText}>Already have an account? Sign in</Text>
+        <Pressable style={styles.secondaryButton} onPress={() => navigation.goBack()}>
+          <Text style={styles.secondaryButtonText}>Back to Login</Text>
         </Pressable>
       </View>
     </View>
@@ -165,25 +115,6 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     fontFamily: fonts.body,
     fontSize: 14
-  },
-  passwordContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radii.button,
-    backgroundColor: "#FFFFFF"
-  },
-  passwordInput: {
-    flex: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 11,
-    color: colors.textPrimary,
-    fontFamily: fonts.body,
-    fontSize: 14
-  },
-  eyeIcon: {
-    paddingRight: 12
   },
   primaryButton: {
     marginTop: 6,

@@ -2,6 +2,7 @@ import React, { useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  DimensionValue,
   Modal,
   Pressable,
   StyleSheet,
@@ -156,6 +157,10 @@ export function DashboardScreen() {
 
   const selectedPropertyOccupied =
     (selectedProperty?.occupancyStatus ?? "available") === "occupied";
+  const financeMax = Math.max(summary.monthCollection, summary.monthExpenses, summary.pendingDues, 1);
+  const collectionWidth = `${Math.max(6, (summary.monthCollection / financeMax) * 100)}%` as DimensionValue;
+  const expenseWidth = `${Math.max(6, (summary.monthExpenses / financeMax) * 100)}%` as DimensionValue;
+  const dueWidth = `${Math.max(6, (summary.pendingDues / financeMax) * 100)}%` as DimensionValue;
 
   const canCreateTenant =
     Boolean(selectedProperty?.id) &&
@@ -210,6 +215,30 @@ export function DashboardScreen() {
         </LinearGradient>
         <InfoCard title="Collection This Month" value={currency(summary.monthCollection)} style={styles.metricCard} />
       </View>
+
+      <InfoCard title="Money Flow">
+        <View style={styles.chartRow}>
+          <Text style={styles.chartLabel}>Collected</Text>
+          <View style={styles.chartTrack}>
+            <View style={[styles.chartBar, styles.chartBarCollection, { width: collectionWidth }]} />
+          </View>
+          <Text style={styles.chartValue}>{currency(summary.monthCollection)}</Text>
+        </View>
+        <View style={styles.chartRow}>
+          <Text style={styles.chartLabel}>Spent</Text>
+          <View style={styles.chartTrack}>
+            <View style={[styles.chartBar, styles.chartBarExpense, { width: expenseWidth }]} />
+          </View>
+          <Text style={styles.chartValue}>{currency(summary.monthExpenses)}</Text>
+        </View>
+        <View style={styles.chartRow}>
+          <Text style={styles.chartLabel}>Pending</Text>
+          <View style={styles.chartTrack}>
+            <View style={[styles.chartBar, styles.chartBarDue, { width: dueWidth }]} />
+          </View>
+          <Text style={styles.chartValue}>{currency(summary.pendingDues)}</Text>
+        </View>
+      </InfoCard>
 
       <InfoCard
         title="Properties Studio"
@@ -531,6 +560,39 @@ const styles = StyleSheet.create({
   },
   metricCard: {
     width: "100%",
+  },
+  chartRow: {
+    gap: 6,
+    paddingVertical: 4,
+  },
+  chartLabel: {
+    color: colors.textSecondary,
+    fontFamily: fonts.heading,
+    fontSize: 12,
+  },
+  chartTrack: {
+    height: 12,
+    borderRadius: 999,
+    backgroundColor: colors.surfaceAlt,
+    overflow: "hidden",
+  },
+  chartBar: {
+    height: "100%",
+    borderRadius: 999,
+  },
+  chartBarCollection: {
+    backgroundColor: colors.success,
+  },
+  chartBarExpense: {
+    backgroundColor: colors.warning,
+  },
+  chartBarDue: {
+    backgroundColor: colors.primary,
+  },
+  chartValue: {
+    color: colors.textMuted,
+    fontFamily: fonts.body,
+    fontSize: 11,
   },
   inlineAction: {
     borderRadius: 999,

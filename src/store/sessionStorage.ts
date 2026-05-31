@@ -4,6 +4,7 @@ import { UserRole } from "../services/api/authService";
 type StoredUser = {
   id: string;
   name: string;
+  phone?: string;
   role: UserRole;
 };
 
@@ -18,8 +19,8 @@ export type AuthSession = {
 export async function saveSession(session: AuthSession) {
   try {
     await SecureStore.setItemAsync(SESSION_KEY, JSON.stringify(session));
-  } catch (error) {
-    console.error("[AUTH] Failed to persist session", error);
+  } catch {
+    // SecureStore can fail on unsupported environments; auth can continue without persistence.
   }
 }
 
@@ -39,8 +40,7 @@ export async function loadSession() {
       refreshToken: parsed.refreshToken,
       user: parsed.user
     } satisfies AuthSession;
-  } catch (error) {
-    console.error("[AUTH] Failed to load session", error);
+  } catch {
     return null;
   }
 }
@@ -48,8 +48,8 @@ export async function loadSession() {
 export async function clearSessionStorage() {
   try {
     await SecureStore.deleteItemAsync(SESSION_KEY);
-  } catch (error) {
-    console.error("[AUTH] Failed to clear session", error);
+  } catch {
+    // Ignore storage cleanup errors; in-memory auth state is already cleared by the caller.
   }
 }
 

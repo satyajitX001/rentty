@@ -44,6 +44,7 @@ const normalizePayment = (input: unknown): Payment => {
 export type PaymentFilters = {
   month?: string;
   tenantId?: string;
+  propertyId?: string;
 };
 
 export type UpdatePaymentInput = {
@@ -58,7 +59,8 @@ export type UpdatePaymentInput = {
 export async function getPayments(filters: PaymentFilters = {}) {
   const query = {
     ...(filters.month && filters.month.trim().length > 0 ? { month: filters.month } : {}),
-    ...(filters.tenantId ? { tenantId: filters.tenantId } : {})
+    ...(filters.tenantId ? { tenantId: filters.tenantId } : {}),
+    ...(filters.propertyId ? { propertyId: filters.propertyId } : {})
   };
   const data = await httpClient.get<unknown>("/collections/payments", query);
   return toArray<unknown>(data, ["payments", "items", "data"]).map(normalizePayment);

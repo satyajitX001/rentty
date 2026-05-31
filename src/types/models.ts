@@ -57,6 +57,7 @@ export type MaintenanceRequest = {
   description: string;
   priority: "low" | "medium" | "high";
   status: "open" | "in_progress" | "resolved";
+  servicedOn?: string;
   requestedOn: string;
   updatedOn: string;
   serviceProvider: string;
