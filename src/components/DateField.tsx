@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import DateTimePicker, { DateTimePickerEvent } from "@react-native-community/datetimepicker";
-import { colors, fonts, radii } from "../theme/tokens";
+import { AppTheme, useAppTheme, useThemedStyles } from "../theme";
 
 type Props = {
   value: string;
@@ -20,6 +20,8 @@ function parseInputDate(value: string) {
 }
 
 export function DateField({ value, placeholder, onChange }: Props) {
+  const { colors, fonts, radii, shadows } = useAppTheme();
+  const styles = useThemedStyles(createStyles);
   const [open, setOpen] = useState(false);
   const [tempDate, setTempDate] = useState<Date>(parseInputDate(value));
   const pickerValue = useMemo(() => parseInputDate(value), [value]);
@@ -81,7 +83,7 @@ export function DateField({ value, placeholder, onChange }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = ({ colors, fonts, radii, shadows }: AppTheme) => StyleSheet.create({
   container: {
     gap: 4,
   },
@@ -89,7 +91,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: radii.button,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.surfaceAlt,
     paddingHorizontal: 12,
     paddingVertical: 11,
     minHeight: 44,

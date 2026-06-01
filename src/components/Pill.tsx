@@ -1,20 +1,21 @@
 import React from "react";
 import { StyleSheet, Text, View } from "react-native";
-import { colors, fonts, radii } from "../theme/tokens";
+import { AppTheme, useAppTheme, useThemedStyles } from "../theme";
 
 type Props = {
   label: string;
   tone?: "default" | "success" | "warning" | "danger";
 };
 
-const toneMap = {
-  default: { bg: colors.primarySoft, text: colors.primaryDark },
-  success: { bg: "#E8F8F1", text: colors.success },
-  warning: { bg: "#FFF4E5", text: colors.warning },
-  danger: { bg: "#FDEBEC", text: colors.danger }
-};
-
 export function Pill({ label, tone = "default" }: Props) {
+  const { colors } = useAppTheme();
+  const styles = useThemedStyles(createStyles);
+  const toneMap = {
+    default: { bg: colors.primarySoft, text: colors.primaryDark },
+    success: { bg: "#E8F8F1", text: colors.success },
+    warning: { bg: "#FFF4E5", text: colors.warning },
+    danger: { bg: "#FDEBEC", text: colors.danger }
+  };
   const palette = toneMap[tone];
 
   return (
@@ -24,7 +25,7 @@ export function Pill({ label, tone = "default" }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = ({ fonts, radii }: AppTheme) => StyleSheet.create({
   pill: {
     borderRadius: radii.pill,
     paddingHorizontal: 10,

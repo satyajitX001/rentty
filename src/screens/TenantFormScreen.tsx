@@ -7,7 +7,7 @@ import { Screen } from "../components/Screen";
 import { DateField } from "../components/DateField";
 import { createTenant } from "../services/api/tenantService";
 import { queryKeys } from "../services/api/queryKeys";
-import { colors, fonts, radii } from "../theme/tokens";
+import { AppTheme, useAppTheme, useThemedStyles } from "../theme";
 import { AppStackParamList } from "../navigation/AppStackNavigator";
 
 type Props = NativeStackScreenProps<AppStackParamList, "TenantForm">;
@@ -18,6 +18,8 @@ function getErrorMessage(error: unknown) {
 }
 
 export function TenantFormScreen({ navigation, route }: Props) {
+  const { colors, fonts, radii, shadows } = useAppTheme();
+  const styles = useThemedStyles(createStyles);
   const queryClient = useQueryClient();
   const { propertyId, propertyName, propertyAddress } = route.params;
 
@@ -169,7 +171,7 @@ export function TenantFormScreen({ navigation, route }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = ({ colors, fonts, radii, shadows }: AppTheme) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.page,
@@ -179,7 +181,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: radii.button,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.surfaceAlt,
     paddingHorizontal: 12,
     paddingVertical: 11,
     color: colors.textPrimary,

@@ -6,7 +6,7 @@ import { InfoCard } from "../components/InfoCard";
 import { Screen } from "../components/Screen";
 import { assignCaretaker } from "../services/api/propertyService";
 import { queryKeys } from "../services/api/queryKeys";
-import { colors, fonts, radii } from "../theme/tokens";
+import { AppTheme, useAppTheme, useThemedStyles } from "../theme";
 import { AppStackParamList } from "../navigation/AppStackNavigator";
 
 type Props = NativeStackScreenProps<AppStackParamList, "AssignCaretaker">;
@@ -17,6 +17,8 @@ function getErrorMessage(error: unknown) {
 }
 
 export function AssignCaretakerScreen({ navigation, route }: Props) {
+  const { colors, fonts, radii, shadows } = useAppTheme();
+  const styles = useThemedStyles(createStyles);
   const { property } = route.params;
   const queryClient = useQueryClient();
 
@@ -92,7 +94,7 @@ export function AssignCaretakerScreen({ navigation, route }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = ({ colors, fonts, radii, shadows }: AppTheme) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.page,
@@ -103,7 +105,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: radii.button,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.surfaceAlt,
     paddingHorizontal: 12,
     paddingVertical: 11,
     color: colors.textPrimary,

@@ -16,7 +16,7 @@ import { Screen } from "../components/Screen";
 import { Pill } from "../components/Pill";
 import { DateField } from "../components/DateField";
 import { useAuth } from "../store/AuthContext";
-import { colors, fonts, radii } from "../theme/tokens";
+import { AppTheme, useAppTheme, useThemedStyles } from "../theme";
 import { Tenant, Property, Payment } from "../types/models";
 import { AppStackParamList } from "../navigation/AppStackNavigator";
 import {
@@ -59,6 +59,8 @@ function inferDueMonth(dateInput: string) {
 }
 
 export function TenantDetailsScreen({ route }: Props) {
+  const { colors, fonts, radii, shadows } = useAppTheme();
+  const styles = useThemedStyles(createStyles);
   const { tenant: initialTenant, property } = route.params;
   const navigation = useNavigation<NativeStackNavigationProp<AppStackParamList>>();
   const queryClient = useQueryClient();
@@ -455,7 +457,7 @@ export function TenantDetailsScreen({ route }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = ({ colors, fonts, radii, shadows }: AppTheme) => StyleSheet.create({
   header: {
     flexDirection: "row",
     alignItems: "center",
@@ -605,7 +607,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: radii.button,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.surfaceAlt,
     paddingHorizontal: 12,
     paddingVertical: 11,
     color: colors.textPrimary,

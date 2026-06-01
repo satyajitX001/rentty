@@ -1,6 +1,6 @@
 import React, { ReactNode } from "react";
 import { StyleProp, StyleSheet, Text, View, ViewStyle } from "react-native";
-import { colors, fonts, radii, shadows } from "../theme/tokens";
+import { AppTheme, useAppTheme, useThemedStyles } from "../theme";
 
 type Props = {
   title: string;
@@ -11,6 +11,8 @@ type Props = {
 };
 
 export function InfoCard({ title, value, rightNode, children, style }: Props) {
+  const { colors, fonts, radii, shadows } = useAppTheme();
+  const styles = useThemedStyles(createStyles);
   return (
     <View style={[styles.card, style]}>
       <View style={styles.row}>
@@ -23,7 +25,7 @@ export function InfoCard({ title, value, rightNode, children, style }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = ({ colors, fonts, radii, shadows }: AppTheme) => StyleSheet.create({
   card: {
     backgroundColor: colors.surface,
     borderRadius: radii.card,

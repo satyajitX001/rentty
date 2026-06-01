@@ -9,7 +9,7 @@ import { Pill } from "../components/Pill";
 import { getPayments } from "../services/api/collectionService";
 import { queryKeys } from "../services/api/queryKeys";
 import { getTenants, removeTenant } from "../services/api/tenantService";
-import { colors, fonts, radii } from "../theme/tokens";
+import { AppTheme, useAppTheme, useThemedStyles } from "../theme";
 import { AppStackParamList } from "../navigation/AppStackNavigator";
 
 const money = (value: number) => `INR ${value.toLocaleString("en-IN")}`;
@@ -21,6 +21,8 @@ function getErrorMessage(error: unknown) {
 }
 
 export function PropertyActionsScreen({ navigation, route }: Props) {
+  const { colors, fonts, radii, shadows } = useAppTheme();
+  const styles = useThemedStyles(createStyles);
   const { property } = route.params;
   const queryClient = useQueryClient();
   const [isRemoveModalVisible, setIsRemoveModalVisible] = useState(false);
@@ -239,7 +241,7 @@ export function PropertyActionsScreen({ navigation, route }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = ({ colors, fonts, radii, shadows }: AppTheme) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.page,
@@ -380,7 +382,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: radii.button,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.surfaceAlt,
     paddingHorizontal: 12,
     paddingVertical: 11,
     color: colors.textPrimary,

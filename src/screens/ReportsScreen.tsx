@@ -6,7 +6,7 @@ import { useMutation } from "@tanstack/react-query";
 import { Screen } from "../components/Screen";
 import { reportCards } from "../data/reportCards";
 import { generateReport, ReportType } from "../services/api/reportService";
-import { colors, fonts, radii, shadows } from "../theme/tokens";
+import { AppTheme, useAppTheme, useThemedStyles } from "../theme";
 import { buildMonthOptions, currentMonthKey, monthLabel, monthRange, shiftMonth } from "../utils/month";
 
 type IconName = React.ComponentProps<typeof Ionicons>["name"];
@@ -21,6 +21,8 @@ const reportIcons: Record<ReportType, IconName> = {
 };
 
 export function ReportsScreen() {
+  const { colors, fonts, radii, shadows } = useAppTheme();
+  const styles = useThemedStyles(createStyles);
   const defaultMonth = useMemo(() => currentMonthKey(), []);
   const monthOptions = useMemo(() => buildMonthOptions(), []);
   const { width } = useWindowDimensions();
@@ -64,7 +66,7 @@ export function ReportsScreen() {
   };
 
   return (
-    <Screen title="Reports" subtitle="Month-wise PDF reports for finance review">
+    <Screen title="Reports" subtitle="Month-wise PDF reports for finance review" showHeader={false}>
       <LinearGradient colors={["#173FAF", "#2B66FF"]} style={styles.hero}>
         <Text style={styles.heroEyebrow}>PDF CENTER</Text>
         <Text style={styles.heroTitle}>Monthly reports</Text>
@@ -158,7 +160,7 @@ export function ReportsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = ({ colors, fonts, radii, shadows }: AppTheme) => StyleSheet.create({
   hero: {
     borderRadius: 22,
     padding: 16,

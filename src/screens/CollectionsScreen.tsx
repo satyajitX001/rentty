@@ -7,12 +7,14 @@ import { Screen } from "../components/Screen";
 import { getPayments } from "../services/api/collectionService";
 import { queryKeys } from "../services/api/queryKeys";
 import { getTenants } from "../services/api/tenantService";
-import { colors, fonts, radii } from "../theme/tokens";
+import { AppTheme, useAppTheme, useThemedStyles } from "../theme";
 import { buildMonthOptions, currentMonthKey, monthLabel, shiftMonth } from "../utils/month";
 
 const money = (value: number) => `INR ${value.toLocaleString("en-IN")}`;
 
 export function CollectionsScreen() {
+  const { colors, fonts, radii, shadows } = useAppTheme();
+  const styles = useThemedStyles(createStyles);
   const defaultMonth = useMemo(() => currentMonthKey(), []);
   const monthOptions = useMemo(() => buildMonthOptions(), []);
   const [monthKey, setMonthKey] = useState(defaultMonth);
@@ -25,7 +27,7 @@ export function CollectionsScreen() {
 
   if (tenantsQuery.isPending || paymentsQuery.isPending) {
     return (
-      <Screen title="Collections" subtitle="Pending dues and payment timeline">
+      <Screen title="Collections" subtitle="Pending dues and payment timeline" showHeader={false}>
         <ActivityIndicator color={colors.primary} />
       </Screen>
     );
@@ -33,7 +35,7 @@ export function CollectionsScreen() {
 
   if (tenantsQuery.isError || paymentsQuery.isError) {
     return (
-      <Screen title="Collections" subtitle="Pending dues and payment timeline">
+      <Screen title="Collections" subtitle="Pending dues and payment timeline" showHeader={false}>
         <InfoCard title="Unable to load collections">
           <Text style={styles.meta}>Please check API server and retry.</Text>
         </InfoCard>
@@ -48,7 +50,7 @@ export function CollectionsScreen() {
   const totalCollected = payments.reduce((sum, payment) => sum + payment.amount, 0);
 
   return (
-    <Screen title="Collections" subtitle="A clean ledger view for what is pending and what came in">
+    <Screen title="Collections" subtitle="A clean ledger view for what is pending and what came in" showHeader={false}>
       <InfoCard title="Collections">
         <View style={styles.monthPicker}>
           <Pressable style={styles.monthButton} onPress={() => setMonthKey((current) => shiftMonth(current, -1))}>
@@ -143,7 +145,7 @@ export function CollectionsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = ({ colors, fonts, radii, shadows }: AppTheme) => StyleSheet.create({
   metricRow: {
     flexDirection: "row",
     gap: 10,

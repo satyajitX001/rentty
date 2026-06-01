@@ -8,7 +8,7 @@ import { Screen } from "../components/Screen";
 import { createMaintenanceRequest, getMaintenanceRequests, updateMaintenanceStatus } from "../services/api/maintenanceService";
 import { getProperties } from "../services/api/propertyService";
 import { queryKeys } from "../services/api/queryKeys";
-import { colors, fonts, radii } from "../theme/tokens";
+import { AppTheme, useAppTheme, useThemedStyles } from "../theme";
 import { MaintenanceRequest } from "../types/models";
 import { currentMonthKey, monthLabel, shiftMonth } from "../utils/month";
 
@@ -37,6 +37,8 @@ function formatDate(value?: string) {
 }
 
 export function MaintenanceScreen() {
+  const { colors, fonts, radii, shadows } = useAppTheme();
+  const styles = useThemedStyles(createStyles);
   const queryClient = useQueryClient();
   const defaultMonth = useMemo(() => currentMonthKey(), []);
   const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
@@ -130,7 +132,7 @@ export function MaintenanceScreen() {
 
   if (requestsQuery.isPending || propertiesQuery.isPending) {
     return (
-      <Screen title="Maintenance" subtitle="Repairs, spending and closure">
+      <Screen title="Maintenance" subtitle="Repairs, spending and closure" showHeader={false}>
         <ActivityIndicator color={colors.primary} />
       </Screen>
     );
@@ -138,7 +140,7 @@ export function MaintenanceScreen() {
 
   if (requestsQuery.isError || propertiesQuery.isError) {
     return (
-      <Screen title="Maintenance" subtitle="Repairs, spending and closure">
+      <Screen title="Maintenance" subtitle="Repairs, spending and closure" showHeader={false}>
         <InfoCard title="Unable to load maintenance">
           <Text style={styles.meta}>Please check API server and retry.</Text>
         </InfoCard>
@@ -147,7 +149,7 @@ export function MaintenanceScreen() {
   }
 
   return (
-    <Screen title="Maintenance" subtitle="Log repairs against properties and track spend">
+    <Screen title="Maintenance" subtitle="Log repairs against properties and track spend" showHeader={false}>
       <InfoCard
         title="Maintenance Desk"
         rightNode={(
@@ -314,7 +316,7 @@ export function MaintenanceScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = ({ colors, fonts, radii, shadows }: AppTheme) => StyleSheet.create({
   monthPicker: {
     flexDirection: "row",
     alignItems: "center",
@@ -531,7 +533,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: radii.button,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.surfaceAlt,
     paddingHorizontal: 12,
     paddingVertical: 11,
     color: colors.textPrimary,

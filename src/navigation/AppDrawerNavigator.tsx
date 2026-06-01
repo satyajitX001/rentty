@@ -8,19 +8,33 @@ import {
   createDrawerNavigator,
 } from "@react-navigation/drawer";
 import { Ionicons } from "@expo/vector-icons";
+import { getFocusedRouteNameFromRoute } from "@react-navigation/native";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { RootNavigator } from "./RootNavigator";
 import { useAuth } from "../store/AuthContext";
-import { colors, fonts, radii } from "../theme/tokens";
+import { AppTheme, useAppTheme, useThemedStyles } from "../theme";
 import { getDashboardSummary } from "../services/api/dashboardService";
 import { queryKeys } from "../services/api/queryKeys";
 import { changePassword, updateProfile } from "../services/api/authService";
+import { moderateScale, scale, verticalScale } from "../utils/scale";
 
 export type AppDrawerParamList = {
   Home: undefined;
 };
 
 const Drawer = createDrawerNavigator<AppDrawerParamList>();
+const tabHeaderTitles = {
+  Dashboard: "Dashboard",
+  Tenants: "Tenants",
+  Collections: "Collections",
+  Maintenance: "Maintenance",
+  Reports: "Reports",
+} as const;
+
+function getHeaderTitleFromRoute(route: any) {
+  const routeName = getFocusedRouteNameFromRoute(route) ?? "Dashboard";
+  return tabHeaderTitles[routeName as keyof typeof tabHeaderTitles] ?? "Dashboard";
+}
 
 function initials(name?: string) {
   if (!name) return "RO";
@@ -33,6 +47,8 @@ function initials(name?: string) {
 }
 
 function CustomDrawerContent(props: DrawerContentComponentProps) {
+  const { colors } = useAppTheme();
+  const styles = useThemedStyles(createStyles);
   const { user, signOut, themeMode, toggleThemeMode, updateUser } = useAuth();
   const [isProfileVisible, setIsProfileVisible] = useState(false);
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
@@ -88,7 +104,7 @@ function CustomDrawerContent(props: DrawerContentComponentProps) {
           setIsProfileVisible(true);
         }}
       >
-        <Ionicons name="person-circle-outline" color={colors.primaryDark} size={18} />
+        <Ionicons name="person-circle-outline" color={colors.primaryDark} size={moderateScale(18)} />
         <Text style={styles.editProfileText}>Edit Profile</Text>
       </Pressable>
       <Pressable
@@ -99,7 +115,7 @@ function CustomDrawerContent(props: DrawerContentComponentProps) {
           setIsPasswordVisible(true);
         }}
       >
-        <Ionicons name="key-outline" color={colors.primaryDark} size={18} />
+        <Ionicons name="key-outline" color={colors.primaryDark} size={moderateScale(18)} />
         <Text style={styles.editProfileText}>Change Password</Text>
       </Pressable>
 
@@ -205,16 +221,18 @@ function CustomDrawerContent(props: DrawerContentComponentProps) {
 }
 
 export function AppDrawerNavigator() {
+  const { colors, fonts } = useAppTheme();
+
   return (
     <Drawer.Navigator
       screenOptions={{
         headerShown: true,
-        headerTitle: "RentOk",
         headerTintColor: colors.textPrimary,
         headerStyle: { backgroundColor: colors.surface },
+        headerTitleStyle: { fontFamily: fonts.display, fontSize: moderateScale(20) },
         drawerActiveTintColor: colors.primary,
         drawerInactiveTintColor: colors.textMuted,
-        drawerLabelStyle: { fontFamily: fonts.heading, fontSize: 13 },
+        drawerLabelStyle: { fontFamily: fonts.heading, fontSize: moderateScale(13) },
         drawerStyle: { backgroundColor: colors.surface },
       }}
       drawerContent={(props) => <CustomDrawerContent {...props} />}
@@ -222,35 +240,36 @@ export function AppDrawerNavigator() {
       <Drawer.Screen
         name="Home"
         component={RootNavigator}
-        options={{
-          title: "Dashboard",
-          drawerIcon: ({ color, size }) => <Ionicons name="grid-outline" color={color} size={size} />,
-        }}
+        options={({ route }) => ({
+          title: getHeaderTitleFromRoute(route),
+          headerTitle: getHeaderTitleFromRoute(route),
+          drawerIcon: ({ color, size }) => <Ionicons name="grid-outline" color={color} size={moderateScale(size)} />,
+        })}
       />
     </Drawer.Navigator>
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = ({ colors, fonts, radii }: AppTheme) => StyleSheet.create({
   drawerContainer: {
     flexGrow: 1,
   },
   profileWrap: {
-    marginHorizontal: 12,
-    marginTop: 8,
-    marginBottom: 18,
-    padding: 12,
+    marginHorizontal: scale(12),
+    marginTop: verticalScale(8),
+    marginBottom: verticalScale(18),
+    padding: moderateScale(12),
     borderRadius: radii.card,
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.surfaceAlt,
     flexDirection: "row",
-    gap: 10,
+    gap: scale(10),
   },
   avatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: moderateScale(44),
+    height: moderateScale(44),
+    borderRadius: moderateScale(22),
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: colors.primaryDark,
@@ -258,100 +277,100 @@ const styles = StyleSheet.create({
   avatarText: {
     color: "#FFFFFF",
     fontFamily: fonts.display,
-    fontSize: 14,
+    fontSize: moderateScale(14),
   },
   profileMeta: {
     flex: 1,
-    gap: 3,
+    gap: verticalScale(3),
   },
   profileName: {
     color: colors.textPrimary,
     fontFamily: fonts.heading,
-    fontSize: 14,
+    fontSize: moderateScale(14),
   },
   profileSub: {
     color: colors.textMuted,
     fontFamily: fonts.body,
-    fontSize: 12,
+    fontSize: moderateScale(12),
   },
   propertyCount: {
     color: colors.primary,
     fontFamily: fonts.heading,
-    fontSize: 11,
-    marginTop: 2,
+    fontSize: moderateScale(11),
+    marginTop: verticalScale(2),
   },
   editProfileButton: {
-    marginHorizontal: 12,
-    marginBottom: 12,
+    marginHorizontal: scale(12),
+    marginBottom: verticalScale(12),
     borderRadius: radii.button,
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.primarySoft,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    paddingHorizontal: scale(12),
+    paddingVertical: verticalScale(10),
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: scale(8),
   },
   editProfileText: {
     color: colors.primaryDark,
     fontFamily: fonts.heading,
-    fontSize: 13,
+    fontSize: moderateScale(13),
   },
   statsRow: {
     flexDirection: "row",
-    gap: 10,
-    marginHorizontal: 12,
-    marginBottom: 18,
+    gap: scale(10),
+    marginHorizontal: scale(12),
+    marginBottom: verticalScale(18),
   },
   statBox: {
     flex: 1,
-    borderRadius: 12,
-    padding: 12,
+    borderRadius: moderateScale(12),
+    padding: moderateScale(12),
     alignItems: "center",
   },
   occupiedBox: {
-    backgroundColor: "#FFF8E7",
+    backgroundColor: colors.primarySoft,
     borderWidth: 1,
-    borderColor: "#FFD966",
+    borderColor: colors.primary,
   },
   availableBox: {
-    backgroundColor: "#E8F5E9",
+    backgroundColor: colors.surfaceAlt,
     borderWidth: 1,
-    borderColor: "#81C784",
+    borderColor: colors.success,
   },
   statValue: {
     color: colors.textPrimary,
     fontFamily: fonts.display,
-    fontSize: 18,
+    fontSize: moderateScale(18),
   },
   statLabel: {
     color: colors.textMuted,
     fontFamily: fonts.body,
-    fontSize: 11,
-    marginTop: 2,
+    fontSize: moderateScale(11),
+    marginTop: verticalScale(2),
   },
   settingsBlock: {
     marginTop: "auto",
-    marginHorizontal: 12,
-    marginBottom: 10,
+    marginHorizontal: scale(12),
+    marginBottom: verticalScale(10),
     borderTopWidth: 1,
     borderTopColor: colors.border,
-    paddingTop: 12,
-    gap: 8,
+    paddingTop: verticalScale(12),
+    gap: verticalScale(8),
   },
   settingsTitle: {
     color: colors.textSecondary,
     fontFamily: fonts.heading,
-    fontSize: 12,
+    fontSize: moderateScale(12),
   },
   themeRow: {
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: radii.button,
     backgroundColor: colors.surfaceAlt,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
+    paddingHorizontal: scale(10),
+    paddingVertical: verticalScale(8),
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
@@ -359,12 +378,12 @@ const styles = StyleSheet.create({
   themeLabel: {
     color: colors.textPrimary,
     fontFamily: fonts.body,
-    fontSize: 13,
+    fontSize: moderateScale(13),
   },
   logoutText: {
     color: colors.danger,
     fontFamily: fonts.heading,
-    fontSize: 13,
+    fontSize: moderateScale(13),
   },
   modalBackdrop: {
     flex: 1,
@@ -375,8 +394,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderTopLeftRadius: radii.card,
     borderTopRightRadius: radii.card,
-    padding: 16,
-    gap: 10,
+    padding: moderateScale(16),
+    gap: verticalScale(10),
     borderWidth: 1,
     borderColor: colors.border,
   },
@@ -384,23 +403,23 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    gap: 10,
+    gap: scale(10),
   },
   modalTitle: {
     color: colors.textPrimary,
     fontFamily: fonts.display,
-    fontSize: 20,
+    fontSize: moderateScale(20),
     flex: 1,
   },
   modalMeta: {
     color: colors.textMuted,
     fontFamily: fonts.body,
-    fontSize: 12,
+    fontSize: moderateScale(12),
   },
   modalCloseButton: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: moderateScale(34),
+    height: moderateScale(34),
+    borderRadius: moderateScale(17),
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.surfaceAlt,
@@ -410,36 +429,36 @@ const styles = StyleSheet.create({
   modalCloseText: {
     color: colors.textSecondary,
     fontFamily: fonts.heading,
-    fontSize: 13,
+    fontSize: moderateScale(13),
   },
   input: {
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: radii.button,
-    backgroundColor: "#FFFFFF",
-    paddingHorizontal: 12,
-    paddingVertical: 11,
+    backgroundColor: colors.surfaceAlt,
+    paddingHorizontal: scale(12),
+    paddingVertical: verticalScale(11),
     color: colors.textPrimary,
     fontFamily: fonts.body,
-    fontSize: 14,
+    fontSize: moderateScale(14),
   },
   modalActions: {
     flexDirection: "row",
-    gap: 8,
+    gap: scale(8),
   },
   primaryButton: {
     flex: 1,
     borderRadius: radii.button,
     backgroundColor: colors.primary,
-    minHeight: 42,
+    minHeight: verticalScale(42),
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 14,
+    paddingHorizontal: scale(14),
   },
   primaryButtonText: {
     color: "#FFFFFF",
     fontFamily: fonts.heading,
-    fontSize: 13,
+    fontSize: moderateScale(13),
   },
   secondaryButton: {
     flex: 1,
@@ -447,15 +466,15 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.surfaceAlt,
-    minHeight: 42,
+    minHeight: verticalScale(42),
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 14,
+    paddingHorizontal: scale(14),
   },
   secondaryButtonText: {
     color: colors.primaryDark,
     fontFamily: fonts.heading,
-    fontSize: 13,
+    fontSize: moderateScale(13),
   },
   buttonDisabled: {
     opacity: 0.6,

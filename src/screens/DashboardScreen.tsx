@@ -29,7 +29,7 @@ import { queryKeys } from "../services/api/queryKeys";
 import { getSupportTickets } from "../services/api/supportService";
 import { createTenant, getTenants } from "../services/api/tenantService";
 import { useAuth } from "../store/AuthContext";
-import { colors, fonts, radii } from "../theme/tokens";
+import { AppTheme, useAppTheme, useThemedStyles } from "../theme";
 import { DashboardSummary, Property } from "../types/models";
 import { AppStackParamList } from "../navigation/AppStackNavigator";
 
@@ -66,6 +66,8 @@ function initials(name?: string) {
 }
 
 export function DashboardScreen() {
+  const { colors, fonts, radii, shadows } = useAppTheme();
+  const styles = useThemedStyles(createStyles);
   const { user } = useAuth();
   const navigation = useNavigation<NativeStackNavigationProp<AppStackParamList>>();
   const queryClient = useQueryClient();
@@ -199,7 +201,7 @@ export function DashboardScreen() {
 
   if (loading) {
     return (
-      <Screen title="RentOk Dashboard" subtitle="Operations home for owner and caretaker">
+      <Screen title="RentOk Dashboard" subtitle="Operations home for owner and caretaker" showHeader={false}>
         <ActivityIndicator color={colors.primary} />
       </Screen>
     );
@@ -498,7 +500,7 @@ export function DashboardScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = ({ colors, fonts, radii, shadows }: AppTheme) => StyleSheet.create({
   profileShell: {
     borderRadius: 24,
     padding: 14,
@@ -790,7 +792,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: radii.button,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.surfaceAlt,
     paddingHorizontal: 12,
     paddingVertical: 11,
     color: colors.textPrimary,

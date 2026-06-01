@@ -7,11 +7,15 @@ import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { register } from "../../services/api/authService";
 import type { AuthStackParamList } from "../../navigation/AuthStackNavigator";
 import { useAuth } from "../../store/AuthContext";
-import { colors, fonts, radii, shadows } from "../../theme/tokens";
+import { AppTheme, useAppTheme, useThemedStyles } from "../../theme";
+import { PhoneNumberField, withCountryCode } from "../../components/PhoneNumberField";
+import { moderateScale, scale, verticalScale } from "../../utils/scale";
 
 type AuthNavigation = NativeStackNavigationProp<AuthStackParamList, "SignUp">;
 
 export function SignUpScreen() {
+  const { colors } = useAppTheme();
+  const styles = useThemedStyles(createStyles);
   const navigation = useNavigation<AuthNavigation>();
   const { signIn } = useAuth();
   const [name, setName] = useState("");
@@ -37,7 +41,7 @@ export function SignUpScreen() {
 
   const canSubmit =
     name.trim().length > 0 &&
-    phone.trim().length > 0 &&
+    phone.trim().length === 10 &&
     password.trim().length >= 6 &&
     !registerMutation.isPending;
 
@@ -60,15 +64,7 @@ export function SignUpScreen() {
         />
 
         <Text style={styles.label}>Phone</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="+91-9000011111"
-          placeholderTextColor={colors.textMuted}
-          autoCapitalize="none"
-          keyboardType="phone-pad"
-          value={phone}
-          onChangeText={setPhone}
-        />
+        <PhoneNumberField value={phone} onChangeText={setPhone} />
 
         <Text style={styles.label}>Password</Text>
         <View style={styles.passwordContainer}>
@@ -92,7 +88,7 @@ export function SignUpScreen() {
           onPress={() =>
             registerMutation.mutate({
               name: name.trim(),
-              phone: phone.trim(),
+              phone: withCountryCode(phone),
               password,
               role: "owner"
             })
@@ -114,57 +110,57 @@ export function SignUpScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = ({ colors, fonts, radii, shadows }: AppTheme) => StyleSheet.create({
   page: {
     flex: 1,
     backgroundColor: colors.page,
-    paddingHorizontal: 18,
-    paddingTop: 56,
-    paddingBottom: 24,
-    gap: 18
+    paddingHorizontal: scale(18),
+    paddingTop: verticalScale(56),
+    paddingBottom: verticalScale(24),
+    gap: verticalScale(18)
   },
   hero: {
-    gap: 6
+    gap: verticalScale(6)
   },
   brand: {
     color: colors.primary,
     fontFamily: fonts.display,
-    fontSize: 20
+    fontSize: moderateScale(20)
   },
   title: {
     color: colors.textPrimary,
     fontFamily: fonts.display,
-    fontSize: 28
+    fontSize: moderateScale(28)
   },
   subtitle: {
     color: colors.textMuted,
     fontFamily: fonts.body,
-    fontSize: 13
+    fontSize: moderateScale(13)
   },
   card: {
     backgroundColor: colors.surface,
     borderRadius: radii.card,
     borderWidth: 1,
     borderColor: colors.border,
-    padding: 14,
-    gap: 10,
+    padding: moderateScale(14),
+    gap: verticalScale(10),
     ...shadows.card
   },
   label: {
     color: colors.textSecondary,
     fontFamily: fonts.heading,
-    fontSize: 12
+    fontSize: moderateScale(12)
   },
   input: {
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: radii.button,
-    backgroundColor: "#FFFFFF",
-    paddingHorizontal: 12,
-    paddingVertical: 11,
+    backgroundColor: colors.surfaceAlt,
+    paddingHorizontal: scale(12),
+    paddingVertical: verticalScale(11),
     color: colors.textPrimary,
     fontFamily: fonts.body,
-    fontSize: 14
+    fontSize: moderateScale(14)
   },
   passwordContainer: {
     flexDirection: "row",
@@ -172,46 +168,46 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: radii.button,
-    backgroundColor: "#FFFFFF"
+    backgroundColor: colors.surfaceAlt
   },
   passwordInput: {
     flex: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 11,
+    paddingHorizontal: scale(12),
+    paddingVertical: verticalScale(11),
     color: colors.textPrimary,
     fontFamily: fonts.body,
-    fontSize: 14
+    fontSize: moderateScale(14)
   },
   eyeIcon: {
-    paddingRight: 12
+    paddingRight: scale(12)
   },
   primaryButton: {
-    marginTop: 6,
+    marginTop: verticalScale(6),
     borderRadius: radii.button,
     backgroundColor: colors.primary,
-    minHeight: 44,
+    minHeight: verticalScale(44),
     alignItems: "center",
     justifyContent: "center"
   },
   primaryButtonText: {
     color: "#FFFFFF",
     fontFamily: fonts.heading,
-    fontSize: 14
+    fontSize: moderateScale(14)
   },
   secondaryButton: {
-    minHeight: 42,
+    minHeight: verticalScale(42),
     alignItems: "center",
     justifyContent: "center"
   },
   secondaryButtonText: {
     color: colors.primaryDark,
     fontFamily: fonts.heading,
-    fontSize: 13
+    fontSize: moderateScale(13)
   },
   error: {
     color: colors.danger,
     fontFamily: fonts.heading,
-    fontSize: 12
+    fontSize: moderateScale(12)
   },
   buttonDisabled: {
     opacity: 0.6

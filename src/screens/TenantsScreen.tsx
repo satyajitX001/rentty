@@ -30,7 +30,7 @@ import {
   updateTenant,
 } from "../services/api/tenantService";
 import { AppStackParamList } from "../navigation/AppStackNavigator";
-import { colors, fonts, radii } from "../theme/tokens";
+import { AppTheme, useAppTheme, useThemedStyles } from "../theme";
 import { scale, verticalScale, moderateScale } from "../utils/scale";
 import { Payment, Property, Tenant } from "../types/models";
 
@@ -52,6 +52,8 @@ function inferDueMonth(dateInput: string) {
 }
 
 export function TenantsScreen() {
+  const { colors, fonts, radii, shadows } = useAppTheme();
+  const styles = useThemedStyles(createStyles);
   const queryClient = useQueryClient();
   const navigation = useNavigation<NativeStackNavigationProp<AppStackParamList>>();
   const tenantsQuery = useQuery({ queryKey: queryKeys.tenants.list, queryFn: () => getTenants() });
@@ -256,7 +258,7 @@ export function TenantsScreen() {
 
   if (tenantsQuery.isPending || propertiesQuery.isPending) {
     return (
-      <Screen title="Tenant Management" subtitle="People, payments and property occupancy">
+      <Screen title="Tenant Management" subtitle="People, payments and property occupancy" showHeader={false}>
         <ActivityIndicator color={colors.primary} />
       </Screen>
     );
@@ -264,7 +266,7 @@ export function TenantsScreen() {
 
   if (tenantsQuery.isError || propertiesQuery.isError) {
     return (
-      <Screen title="Tenant Management" subtitle="People, payments and property occupancy">
+      <Screen title="Tenant Management" subtitle="People, payments and property occupancy" showHeader={false}>
         <InfoCard title="Unable to load tenant operations">
           <Text style={styles.error}>
             {getErrorMessage(tenantsQuery.error ?? propertiesQuery.error)}
@@ -278,6 +280,7 @@ export function TenantsScreen() {
     <Screen
       title="Tenant Management"
       subtitle={`${totalTenantCount} tenants | ${dueCount} with dues | ${money(totalDue)} pending`}
+      showHeader={false}
     >
       {properties.length === 0 ? (
         <InfoCard title="No Properties Found">
@@ -608,7 +611,7 @@ export function TenantsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = ({ colors, fonts, radii, shadows }: AppTheme) => StyleSheet.create({
   summaryRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -781,7 +784,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: moderateScale(radii.button),
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.surfaceAlt,
     paddingHorizontal: scale(12),
     paddingVertical: verticalScale(11),
     color: colors.textPrimary,

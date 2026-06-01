@@ -5,11 +5,13 @@ import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { requestPasswordReset } from "../../services/api/authService";
 import type { AuthStackParamList } from "../../navigation/AuthStackNavigator";
-import { colors, fonts, radii, shadows } from "../../theme/tokens";
+import { AppTheme, useAppTheme, useThemedStyles } from "../../theme";
 
 type AuthNavigation = NativeStackNavigationProp<AuthStackParamList, "ForgotPassword">;
 
 export function ForgotPasswordScreen() {
+  const { colors } = useAppTheme();
+  const styles = useThemedStyles(createStyles);
   const navigation = useNavigation<AuthNavigation>();
   const [phone, setPhone] = useState("");
 
@@ -64,7 +66,7 @@ export function ForgotPasswordScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = ({ colors, fonts, radii, shadows }: AppTheme) => StyleSheet.create({
   page: {
     flex: 1,
     backgroundColor: colors.page,
@@ -109,7 +111,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: radii.button,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.surfaceAlt,
     paddingHorizontal: 12,
     paddingVertical: 11,
     color: colors.textPrimary,
