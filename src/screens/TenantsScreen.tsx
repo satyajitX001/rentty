@@ -95,10 +95,10 @@ export function TenantsScreen() {
 
   const invalidateOperationalQueries = async () => {
     await Promise.all([
-      queryClient.invalidateQueries({ queryKey: queryKeys.tenants.list }),
-      queryClient.invalidateQueries({ queryKey: queryKeys.properties.list }),
-      queryClient.invalidateQueries({ queryKey: queryKeys.collections.payments }),
-      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.summary }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.tenants.list, refetchType: "all" }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.properties.list, refetchType: "all" }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.collections.payments, refetchType: "all" }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.summary, refetchType: "all" }),
     ]);
   };
 
@@ -256,6 +256,14 @@ export function TenantsScreen() {
     }
   };
 
+  const handleAddTenant = (property: Property) => {
+    navigation.navigate("TenantForm", {
+      propertyId: property.id,
+      propertyName: property.name,
+      propertyAddress: property.address,
+    });
+  };
+
   if (tenantsQuery.isPending || propertiesQuery.isPending) {
     return (
       <Screen title="Tenant Management" subtitle="People, payments and property occupancy" showHeader={false}>
@@ -292,6 +300,7 @@ export function TenantsScreen() {
             const propertyTenants = tenantsByProperty.get(property.id) ?? [];
             const isOpen = expandedPropertyId === property.id;
             const propertyDue = propertyTenants.reduce((sum, tenant) => sum + tenant.dueAmount, 0);
+            const isOccupied = propertyTenants.some((t) => t.status === "active" && t.active !== false);
 
             return (
               <View key={property.id} style={styles.accordionSection}>
@@ -316,6 +325,21 @@ export function TenantsScreen() {
 
                 {isOpen ? (
                   <View style={styles.accordionBody}>
+                    <Pressable
+                      style={[styles.addTenantButton, isOccupied && styles.addTenantButtonDisabled]}
+                      disabled={isOccupied}
+                      onPress={() => handleAddTenant(property)}
+                    >
+                      <Ionicons
+                        name="person-add-outline"
+                        size={16}
+                        color={isOccupied ? colors.textMuted : colors.primaryDark}
+                      />
+                      <Text style={[styles.addTenantButtonText, isOccupied && styles.addTenantButtonTextDisabled]}>
+                        {isOccupied ? "Property Occupied" : "Add Tenant"}
+                      </Text>
+                    </Pressable>
+
                     {propertyTenants.length === 0 ? (
                       <Text style={styles.emptyText}>No tenants assigned to this property yet.</Text>
                     ) : (
@@ -923,5 +947,31 @@ const createStyles = ({ colors, fonts, radii, shadows }: AppTheme) => StyleSheet
     color: colors.primaryDark,
     fontFamily: fonts.heading,
     fontSize: moderateScale(14),
+  },
+  addTenantButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: scale(8),
+    borderRadius: moderateScale(radii.button),
+    borderWidth: 1,
+    borderStyle: "dashed",
+    borderColor: colors.primary,
+    backgroundColor: colors.primarySoft,
+    paddingVertical: verticalScale(10),
+    marginBottom: verticalScale(6),
+  },
+  addTenantButtonDisabled: {
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceAlt,
+    opacity: 0.6,
+  },
+  addTenantButtonText: {
+    color: colors.primaryDark,
+    fontFamily: fonts.heading,
+    fontSize: moderateScale(13),
+  },
+  addTenantButtonTextDisabled: {
+    color: colors.textMuted,
   },
 });

@@ -1,10 +1,11 @@
-import React, { useMemo, useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
   DimensionValue,
   Modal,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -12,7 +13,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import { useNavigation } from "@react-navigation/native";
+import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { InfoCard } from "../components/InfoCard";
@@ -32,6 +33,7 @@ import { useAuth } from "../store/AuthContext";
 import { AppTheme, useAppTheme, useThemedStyles } from "../theme";
 import { DashboardSummary, Property } from "../types/models";
 import { AppStackParamList } from "../navigation/AppStackNavigator";
+import { scale, verticalScale, moderateScale } from "../utils/scale";
 
 const currency = (value: number) => `INR ${value.toLocaleString("en-IN")}`;
 
@@ -71,7 +73,11 @@ export function DashboardScreen() {
   const { user } = useAuth();
   const navigation = useNavigation<NativeStackNavigationProp<AppStackParamList>>();
   const queryClient = useQueryClient();
-  const summaryQuery = useQuery({ queryKey: queryKeys.dashboard.summary, queryFn: getDashboardSummary });
+  const summaryQuery = useQuery({
+    queryKey: queryKeys.dashboard.summary,
+    queryFn: getDashboardSummary,
+    staleTime: 0,
+  });
   const propertiesQuery = useQuery({ queryKey: queryKeys.properties.list, queryFn: getProperties });
   const alertsQuery = useQuery({ queryKey: queryKeys.notifications.list, queryFn: getNotifications });
   const ticketsQuery = useQuery({ queryKey: queryKeys.support.tickets, queryFn: getSupportTickets });
@@ -101,11 +107,17 @@ export function DashboardScreen() {
 
   const invalidateOperationalQueries = async () => {
     await Promise.all([
-      queryClient.invalidateQueries({ queryKey: queryKeys.properties.list }),
-      queryClient.invalidateQueries({ queryKey: queryKeys.tenants.list }),
-      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.summary }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.properties.list, refetchType: "all" }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.tenants.list, refetchType: "all" }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.summary, refetchType: "all" }),
     ]);
   };
+
+  useFocusEffect(
+    useCallback(() => {
+      void summaryQuery.refetch();
+    }, [summaryQuery.refetch])
+  );
 
   const createTenantMutation = useMutation({
     mutationFn: createTenant,
@@ -155,7 +167,9 @@ export function DashboardScreen() {
   const tickets = ticketsQuery.data ?? [];
   const propertyHistory = propertyHistoryQuery.data ?? [];
 
-  const featuredProperties = useMemo(() => properties, [properties]);
+  const featuredProperties = useMemo(() => {
+    return properties.slice(0, 4);
+  }, [properties]);
 
   const selectedPropertyOccupied =
     (selectedProperty?.occupancyStatus ?? "available") === "occupied";
@@ -186,10 +200,6 @@ export function DashboardScreen() {
 
   const openCreateProperty = () => {
     navigation.navigate("PropertyForm");
-  };
-
-  const getPropertyCardStyle = (status: Property["occupancyStatus"]) => {
-    return status === "occupied" ? styles.propertyCardOccupied : styles.propertyCardAvailable;
   };
 
   const openPropertyDetail = (property: Property) => {
@@ -245,33 +255,73 @@ export function DashboardScreen() {
       <InfoCard
         title="Properties Studio"
         rightNode={
-          user?.role === "owner" ? (
-            <Pressable style={styles.inlineAction} onPress={openCreateProperty}>
-              <Ionicons name="add-circle-outline" size={18} color={colors.primaryDark} />
+          properties.length > 0 ? (
+            <Pressable onPress={() => navigation.navigate("PropertyList")}>
+              <Text style={styles.viewAllTextLink}>View All</Text>
             </Pressable>
           ) : undefined
         }
       >
-        <View style={styles.propertyGrid}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.propertyScrollContainer}
+        >
           {featuredProperties.length === 0 ? (
             <Pressable style={styles.emptyPropertyCta} onPress={openCreateProperty}>
               <Text style={styles.emptyPropertyText}>No properties yet. Tap here to add one.</Text>
             </Pressable>
           ) : null}
           {featuredProperties.map((property) => (
-            <Pressable
-              key={property.id}
-              style={[styles.propertyCard, getPropertyCardStyle(property.occupancyStatus)]}
-              onPress={() => navigation.navigate("PropertyActions", { property })}
-            >
-              <View style={styles.propertyCardHeader}>
-                <Text style={styles.propertyName} numberOfLines={1}>{property.name}</Text>
-                <Ionicons name="pencil" size={14} color={colors.textMuted} />
+            <Pressable key={property.id} style={styles.propertyCard} onPress={() => navigation.navigate("PropertyActions", { property })}>
+              <View style={styles.propertyIconWrap}>
+                <Ionicons
+                  name={property.type === "flat" ? "business-outline" : property.type === "villa" ? "home-outline" : "bed-outline"}
+                  size={20}
+                  color={colors.primary}
+                />
               </View>
-              <Text style={styles.propertyLocation} numberOfLines={1}>{property.address}</Text>
+              <View style={styles.propertyCardBody}>
+                <View style={styles.propertyCardHeader}>
+                  <Text style={styles.propertyName} numberOfLines={1}>{property.name}</Text>
+                </View>
+                <Text style={styles.propertyLocation} numberOfLines={1}>{property.address}</Text>
+                <View style={styles.propertyMetaRow}>
+                  {typeof property.occupiedBeds === "number" || typeof property.totalBeds === "number" ? (
+                    <View style={styles.propertyMetaPill}>
+                      <Ionicons name="people-outline" size={13} color={colors.textMuted} />
+                      <Text style={styles.propertyMetaText}>
+                        {property.occupiedBeds ?? 0}/{property.totalBeds ?? 0} beds
+                      </Text>
+                    </View>
+                  ) : null}
+                  {property.caretaker ? (
+                    <View style={styles.propertyMetaPill}>
+                      <Ionicons name="person-circle-outline" size={13} color={colors.textMuted} />
+                      <Text style={styles.propertyMetaText} numberOfLines={1}>{property.caretaker}</Text>
+                    </View>
+                  ) : null}
+                </View>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+              <View
+                style={[
+                  styles.statusDot,
+                  { backgroundColor: property.occupancyStatus === "occupied" ? colors.warning : colors.success }
+                ]}
+              />
             </Pressable>
           ))}
-        </View>
+          {properties.length > 4 ? (
+            <Pressable
+              style={styles.viewAllCard}
+              onPress={() => navigation.navigate("PropertyList")}
+            >
+              <Ionicons name="arrow-forward-circle-outline" size={28} color={colors.primary} />
+              <Text style={styles.viewAllCardText}>View All ({properties.length})</Text>
+            </Pressable>
+          ) : null}
+        </ScrollView>
       </InfoCard>
 
       <InfoCard title="Operations Pulse">
@@ -699,42 +749,102 @@ const createStyles = ({ colors, fonts, radii, shadows }: AppTheme) => StyleSheet
     fontSize: 12,
   },
   propertyGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
     gap: 10,
   },
   propertyCardHeader: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    gap: 8,
   },
   propertyCard: {
-    width: "48%",
-    borderRadius: radii.card,
-    padding: 12,
-    minHeight: 80,
+    width: scale(220),
+    borderRadius: 16,
+    padding: 14,
+    minHeight: 98,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    ...shadows.card,
+  },
+  statusDot: {
+    position: "absolute",
+    top: scale(12),
+    right: scale(12),
+    width: scale(8),
+    height: scale(8),
+    borderRadius: scale(4),
+  },
+  propertyIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    alignItems: "center",
     justifyContent: "center",
-  },
-  propertyCardOccupied: {
-    backgroundColor: "#FFF8E7",
     borderWidth: 1,
-    borderColor: "#FFD966",
+    borderColor: colors.border,
+    backgroundColor: colors.primarySoft,
   },
-  propertyCardAvailable: {
-    backgroundColor: "#E8F5E9",
-    borderWidth: 1,
-    borderColor: "#81C784",
+  propertyCardBody: {
+    flex: 1,
+    gap: 6,
   },
   propertyName: {
     color: colors.textPrimary,
     fontFamily: fonts.heading,
-    fontSize: 14,
-    marginBottom: 4,
+    fontSize: 15,
+    flex: 1,
   },
   propertyLocation: {
     color: colors.textMuted,
     fontFamily: fonts.body,
     fontSize: 12,
+  },
+  propertyStatusChip: {
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  propertyStatusOccupied: {
+    backgroundColor: "#FEF3C7",
+  },
+  propertyStatusAvailable: {
+    backgroundColor: "#DCFCE7",
+  },
+  propertyStatusText: {
+    fontFamily: fonts.heading,
+    fontSize: 10,
+  },
+  propertyStatusTextOccupied: {
+    color: "#92400E",
+  },
+  propertyStatusTextAvailable: {
+    color: "#166534",
+  },
+  propertyMetaRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+  },
+  propertyMetaPill: {
+    borderRadius: 999,
+    backgroundColor: colors.surfaceAlt,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    maxWidth: "100%",
+  },
+  propertyMetaText: {
+    color: colors.textMuted,
+    fontFamily: fonts.body,
+    fontSize: 11,
   },
   modalBackdrop: {
     flex: 1,
@@ -855,5 +965,40 @@ const createStyles = ({ colors, fonts, radii, shadows }: AppTheme) => StyleSheet
     alignItems: "center",
     gap: 10,
     paddingVertical: 3,
+  },
+  headerActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: scale(10),
+  },
+  viewAllTextLink: {
+    color: colors.primary,
+    fontFamily: fonts.heading,
+    fontSize: moderateScale(13),
+    marginRight: scale(4),
+  },
+  propertyScrollContainer: {
+    gap: scale(12),
+    paddingBottom: verticalScale(8),
+  },
+  viewAllCard: {
+    width: scale(120),
+    borderRadius: 16,
+    padding: 14,
+    minHeight: 98,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: scale(8),
+    borderWidth: 1,
+    borderStyle: "dashed",
+    borderColor: colors.primary,
+    backgroundColor: colors.primarySoft,
+    ...shadows.card,
+  },
+  viewAllCardText: {
+    color: colors.primaryDark,
+    fontFamily: fonts.heading,
+    fontSize: moderateScale(12),
+    textAlign: "center",
   },
 });

@@ -16,6 +16,7 @@ export type CreateMaintenancePayload = {
   description?: string;
   priority: MaintenanceRequest["priority"];
   serviceProvider?: string;
+  requestedOn?: string;
   servicedOn?: string;
   estimatedCost?: number;
 };

@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { InfoCard } from "../components/InfoCard";
@@ -38,7 +38,7 @@ export function TenantFormScreen({ navigation, route }: Props) {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: queryKeys.tenants.list }),
         queryClient.invalidateQueries({ queryKey: queryKeys.properties.list }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.summary }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.summary, refetchType: "all" }),
       ]);
       navigation.goBack();
     },
@@ -76,9 +76,34 @@ export function TenantFormScreen({ navigation, route }: Props) {
     <Screen
       title="Add Tenant"
       subtitle={`${propertyName} - ${propertyAddress}`}
+      reserveTabBarSpace={false}
+      bottomComponent={
+        <View style={styles.footer}>
+          {createTenantMutation.isError ? (
+            <Text style={styles.error}>{getErrorMessage(createTenantMutation.error)}</Text>
+          ) : null}
+          <View style={styles.actionRow}>
+            <Pressable style={styles.secondaryButton} onPress={() => navigation.goBack()}>
+              <Text style={styles.secondaryText}>Cancel</Text>
+            </Pressable>
+            <Pressable
+              style={[styles.primaryButton, !canSave && styles.disabled]}
+              onPress={handleSave}
+              disabled={!canSave}
+            >
+              <Text style={styles.primaryText}>
+                {createTenantMutation.isPending ? "Saving..." : "Save Tenant"}
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      }
       children={
-        <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+        <>
           <InfoCard title="Tenant Information">
+            <Text style={styles.fieldLabel}>
+              Tenant name <Text style={styles.requiredMark}>*</Text>
+            </Text>
             <TextInput
               style={styles.input}
               placeholder="Tenant name"
@@ -86,6 +111,9 @@ export function TenantFormScreen({ navigation, route }: Props) {
               value={tenantName}
               onChangeText={setTenantName}
             />
+            <Text style={styles.fieldLabel}>
+              Tenant address <Text style={styles.requiredMark}>*</Text>
+            </Text>
             <TextInput
               style={styles.input}
               placeholder="Tenant address"
@@ -94,6 +122,9 @@ export function TenantFormScreen({ navigation, route }: Props) {
               onChangeText={setTenantAddress}
               multiline
             />
+            <Text style={styles.fieldLabel}>
+              Mobile number <Text style={styles.requiredMark}>*</Text>
+            </Text>
             <TextInput
               style={styles.input}
               placeholder="Mobile number"
@@ -105,6 +136,9 @@ export function TenantFormScreen({ navigation, route }: Props) {
           </InfoCard>
 
           <InfoCard title="Rent Details">
+            <Text style={styles.fieldLabel}>
+              Monthly rent <Text style={styles.requiredMark}>*</Text>
+            </Text>
             <TextInput
               style={styles.input}
               placeholder="Monthly rent (INR)"
@@ -113,6 +147,9 @@ export function TenantFormScreen({ navigation, route }: Props) {
               value={tenantRent}
               onChangeText={setTenantRent}
             />
+            <Text style={styles.fieldLabel}>
+              Rent due day <Text style={styles.requiredMark}>*</Text>
+            </Text>
             <TextInput
               style={styles.input}
               placeholder="Rent due day (1-31)"
@@ -121,6 +158,9 @@ export function TenantFormScreen({ navigation, route }: Props) {
               value={tenantRentDay}
               onChangeText={setTenantRentDay}
             />
+            <Text style={styles.fieldLabel}>
+              Joined on <Text style={styles.requiredMark}>*</Text>
+            </Text>
             <DateField
               value={tenantJoinedOn}
               onChange={setTenantJoinedOn}
@@ -146,36 +186,22 @@ export function TenantFormScreen({ navigation, route }: Props) {
               onChangeText={setTenantOpeningDue}
             />
           </InfoCard>
-
-          {createTenantMutation.isError ? (
-            <Text style={styles.error}>{getErrorMessage(createTenantMutation.error)}</Text>
-          ) : null}
-
-          <View style={styles.actionRow}>
-            <Pressable style={styles.secondaryButton} onPress={() => navigation.goBack()}>
-              <Text style={styles.secondaryText}>Cancel</Text>
-            </Pressable>
-            <Pressable
-              style={[styles.primaryButton, !canSave && styles.disabled]}
-              onPress={handleSave}
-              disabled={!canSave}
-            >
-              <Text style={styles.primaryText}>
-                {createTenantMutation.isPending ? "Saving..." : "Save Tenant"}
-              </Text>
-            </Pressable>
-          </View>
-        </ScrollView>
+        </>
       }
     />
   );
 }
 
 const createStyles = ({ colors, fonts, radii, shadows }: AppTheme) => StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.page,
-    paddingBottom: 20,
+  fieldLabel: {
+    color: colors.textSecondary,
+    fontFamily: fonts.heading,
+    fontSize: 12,
+  },
+  requiredMark: {
+    color: colors.danger,
+    fontFamily: fonts.heading,
+    fontSize: 12,
   },
   input: {
     borderWidth: 1,
@@ -187,14 +213,13 @@ const createStyles = ({ colors, fonts, radii, shadows }: AppTheme) => StyleSheet
     color: colors.textPrimary,
     fontFamily: fonts.body,
     fontSize: 14,
-    marginBottom: 10,
+  },
+  footer: {
+    gap: 10,
   },
   actionRow: {
     flexDirection: "row",
     gap: 8,
-    paddingHorizontal: 12,
-    paddingBottom: 20,
-    marginTop: 10,
   },
   primaryButton: {
     flex: 1,
@@ -231,7 +256,5 @@ const createStyles = ({ colors, fonts, radii, shadows }: AppTheme) => StyleSheet
     color: colors.warning,
     fontFamily: fonts.heading,
     fontSize: 12,
-    paddingHorizontal: 12,
-    marginBottom: 10,
   },
 });

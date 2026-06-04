@@ -6,6 +6,7 @@ import { TenantFormScreen } from "../screens/TenantFormScreen";
 import { TenantDetailsScreen } from "../screens/TenantDetailsScreen";
 import { PropertyActionsScreen } from "../screens/PropertyActionsScreen";
 import { AssignCaretakerScreen } from "../screens/AssignCaretakerScreen";
+import { PropertyListScreen } from "../screens/PropertyListScreen";
 import { Property, Tenant } from "../types/models";
 
 export type AppStackParamList = {
@@ -15,6 +16,7 @@ export type AppStackParamList = {
   TenantDetails: { tenant: Tenant; property: Property };
   PropertyActions: { property: Property };
   AssignCaretaker: { property: Property };
+  PropertyList: undefined;
 };
 
 const Stack = createNativeStackNavigator<AppStackParamList>();
@@ -51,6 +53,11 @@ export function AppStackNavigator() {
       <Stack.Screen
         name="AssignCaretaker"
         component={AssignCaretakerScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="PropertyList"
+        component={PropertyListScreen}
         options={{ headerShown: false }}
       />
     </Stack.Navigator>

@@ -7,6 +7,7 @@ import { Screen } from "../components/Screen";
 import { reportCards } from "../data/reportCards";
 import { generateReport, ReportType } from "../services/api/reportService";
 import { AppTheme, useAppTheme, useThemedStyles } from "../theme";
+import { getUserFriendlyErrorMessage } from "../utils/errors";
 import { buildMonthOptions, currentMonthKey, monthLabel, monthRange, shiftMonth } from "../utils/month";
 
 type IconName = React.ComponentProps<typeof Ionicons>["name"];
@@ -49,9 +50,13 @@ export function ReportsScreen() {
       setDownloadText("Report generated, but no download URL was returned.");
     },
     onError: (error) => {
-      const message = error instanceof Error ? error.message : "Unable to generate report.";
       setLastDownloadUrl(null);
-      setDownloadText(message);
+      setDownloadText(
+        getUserFriendlyErrorMessage(
+          error,
+          "Unable to download the report right now. Please try again later."
+        )
+      );
     }
   });
 

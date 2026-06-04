@@ -54,7 +54,7 @@ export function PropertyActionsScreen({ navigation, route }: Props) {
       queryClient.invalidateQueries({ queryKey: queryKeys.properties.list }),
       queryClient.invalidateQueries({ queryKey: queryKeys.tenants.list }),
       queryClient.invalidateQueries({ queryKey: queryKeys.collections.payments }),
-      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.summary }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.summary, refetchType: "all" }),
     ]);
   };
 

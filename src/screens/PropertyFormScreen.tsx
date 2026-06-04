@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { InfoCard } from "../components/InfoCard";
@@ -73,7 +73,7 @@ export function PropertyFormScreen({ navigation, route }: Props) {
     onSuccess: async () => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: queryKeys.properties.list }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.summary }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.summary, refetchType: "all" }),
       ]);
       navigation.goBack();
     },
@@ -148,8 +148,9 @@ export function PropertyFormScreen({ navigation, route }: Props) {
     <Screen
       title={editItem ? "Edit Property" : "Add Property"}
       subtitle="Property studio form for owners"
+      reserveTabBarSpace={false}
       children={
-        <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+        <View style={styles.container}>
           <InfoCard title="Property Details">
             <TextInput
               style={styles.input}
@@ -227,7 +228,7 @@ export function PropertyFormScreen({ navigation, route }: Props) {
               </Text>
             </Pressable>
           </View>
-        </ScrollView>
+        </View>
       }
     />
   );
@@ -235,9 +236,7 @@ export function PropertyFormScreen({ navigation, route }: Props) {
 
 const createStyles = ({ colors, fonts, radii, shadows }: AppTheme) => StyleSheet.create({
   container: {
-    flex: 1,
-    backgroundColor: colors.page,
-    paddingBottom: 20,
+    gap: 12,
   },
   input: {
     borderWidth: 1,

@@ -1,5 +1,18 @@
-import React, { useMemo, useState } from "react";
-import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import React, { useEffect, useMemo, useState } from "react";
+import {
+  ActivityIndicator,
+  Alert,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { DateField } from "../components/DateField";
 import { InfoCard } from "../components/InfoCard";
@@ -10,6 +23,7 @@ import { getProperties } from "../services/api/propertyService";
 import { queryKeys } from "../services/api/queryKeys";
 import { AppTheme, useAppTheme, useThemedStyles } from "../theme";
 import { MaintenanceRequest } from "../types/models";
+import { getUserFriendlyErrorMessage } from "../utils/errors";
 import { currentMonthKey, monthLabel, shiftMonth } from "../utils/month";
 
 const money = (value: number) => `INR ${value.toLocaleString("en-IN")}`;
@@ -28,27 +42,29 @@ const nextStatus: Record<MaintenanceRequest["status"], MaintenanceRequest["statu
 
 const priorities: MaintenanceRequest["priority"][] = ["low", "medium", "high"];
 
-function getErrorMessage(error: unknown) {
-  return error instanceof Error ? error.message : "Something went wrong.";
-}
-
 function formatDate(value?: string) {
   return value ? value.slice(0, 10) : "-";
+}
+
+function hasDisplayText(value?: string) {
+  const trimmed = value?.trim();
+  return Boolean(trimmed && trimmed !== "-");
 }
 
 export function MaintenanceScreen() {
   const { colors, fonts, radii, shadows } = useAppTheme();
   const styles = useThemedStyles(createStyles);
   const queryClient = useQueryClient();
+  const insets = useSafeAreaInsets();
   const defaultMonth = useMemo(() => currentMonthKey(), []);
-  const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
   const [monthKey, setMonthKey] = useState(defaultMonth);
   const [activeRequestId, setActiveRequestId] = useState<string | null>(null);
   const [isCreateVisible, setIsCreateVisible] = useState(false);
+  const [isPropertyPickerOpen, setIsPropertyPickerOpen] = useState(false);
   const [selectedPropertyId, setSelectedPropertyId] = useState("");
   const [title, setTitle] = useState("");
-  const [roomNumber, setRoomNumber] = useState("Property");
-  const [servicedOn, setServicedOn] = useState(today);
+  const [roomNumber, setRoomNumber] = useState("");
+  const [servicedOn, setServicedOn] = useState("");
   const [description, setDescription] = useState("");
   const [serviceProvider, setServiceProvider] = useState("");
   const [estimatedCost, setEstimatedCost] = useState("");
@@ -61,7 +77,10 @@ export function MaintenanceScreen() {
   const propertiesQuery = useQuery({ queryKey: queryKeys.properties.list, queryFn: getProperties });
 
   const requests = requestsQuery.data ?? [];
-  const properties = propertiesQuery.data ?? [];
+  const properties = useMemo(
+    () => (propertiesQuery.data ?? []).filter((property) => property.id.trim().length > 0),
+    [propertiesQuery.data]
+  );
   const selectedProperty = properties.find((property) => property.id === selectedPropertyId);
 
   const totalSpent = useMemo(
@@ -73,19 +92,45 @@ export function MaintenanceScreen() {
   const invalidateMaintenance = async () => {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: queryKeys.maintenance.requests }),
-      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.summary })
+      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.summary, refetchType: "all" })
     ]);
   };
 
   const resetForm = () => {
     setSelectedPropertyId("");
+    setIsPropertyPickerOpen(false);
     setTitle("");
-    setRoomNumber("Property");
-    setServicedOn(today);
+    setRoomNumber("");
+    setServicedOn("");
     setDescription("");
     setServiceProvider("");
     setEstimatedCost("");
     setPriority("medium");
+  };
+
+  const openCreateModal = async () => {
+    resetForm();
+    setIsCreateVisible(true);
+    const latestProperties = await queryClient.fetchQuery({
+      queryKey: queryKeys.properties.list,
+      queryFn: getProperties,
+    });
+    const availableProperties = latestProperties.filter((property) => property.id.trim().length > 0);
+    if (availableProperties.length === 1) {
+      setSelectedPropertyId(availableProperties[0]!.id);
+    }
+  };
+
+  useEffect(() => {
+    if (!isCreateVisible || selectedPropertyId || properties.length !== 1) {
+      return;
+    }
+    setSelectedPropertyId(properties[0]!.id);
+  }, [isCreateVisible, properties, selectedPropertyId]);
+
+  const closeCreateModal = () => {
+    setIsCreateVisible(false);
+    resetForm();
   };
 
   const createMutation = useMutation({
@@ -96,7 +141,10 @@ export function MaintenanceScreen() {
       await invalidateMaintenance();
     },
     onError: (error) => {
-      Alert.alert("Unable to log maintenance", getErrorMessage(error));
+      Alert.alert(
+        "Unable to log maintenance",
+        getUserFriendlyErrorMessage(error, "Please check the highlighted fields and try again.")
+      );
     }
   });
 
@@ -105,20 +153,34 @@ export function MaintenanceScreen() {
       updateMaintenanceStatus(requestId, { status }),
     onSuccess: invalidateMaintenance,
     onError: (error) => {
-      Alert.alert("Update failed", getErrorMessage(error));
+      Alert.alert("Update failed", getUserFriendlyErrorMessage(error, "Please try updating the status again."));
     },
     onSettled: () => {
       setActiveRequestId(null);
     }
   });
 
-  const canCreate =
-    selectedPropertyId.length > 0 &&
-    title.trim().length >= 3 &&
-    roomNumber.trim().length > 0 &&
-    servicedOn.trim().length > 0 &&
-    Number(estimatedCost || 0) >= 0 &&
-    !createMutation.isPending;
+  const parsedCost = Number(estimatedCost);
+  const hasProperty = selectedPropertyId.length > 0;
+  const hasTitle = title.trim().length >= 2;
+  const hasRoom = roomNumber.trim().length >= 1;
+  const hasDate = servicedOn.trim().length > 0;
+  const hasAmount = estimatedCost.trim().length > 0 && Number.isFinite(parsedCost) && parsedCost >= 0;
+  const canCreate = hasProperty && hasTitle && hasRoom && hasDate && hasAmount && !createMutation.isPending;
+
+  const saveHint = !hasProperty
+    ? properties.length === 0
+      ? "No property found. Add a property from Dashboard first."
+      : "Tap Select property and choose one from the list."
+    : !hasTitle
+      ? "Enter a work title (at least 2 characters)."
+      : !hasRoom
+        ? "Enter room / area."
+        : !hasDate
+          ? "Pick a maintenance date."
+          : !hasAmount
+            ? "Enter amount spent / estimate."
+            : "";
 
   const updateRequest = async (requestId: string, current: MaintenanceRequest["status"]) => {
     if (current === "resolved") {
@@ -153,7 +215,7 @@ export function MaintenanceScreen() {
       <InfoCard
         title="Maintenance Desk"
         rightNode={(
-          <Pressable style={styles.inlineAction} onPress={() => setIsCreateVisible(true)}>
+          <Pressable style={styles.inlineAction} onPress={openCreateModal}>
             <Text style={styles.inlineActionText}>+ Add</Text>
           </Pressable>
         )}
@@ -196,6 +258,14 @@ export function MaintenanceScreen() {
       {requests.map((request) => {
         const buttonLoading = updateMutation.isPending && activeRequestId === request.id;
         const property = properties.find((item) => item.id === request.propertyId);
+        const descriptionText = hasDisplayText(request.description) ? request.description.trim() : "";
+        const propertyName = hasDisplayText(property?.name) ? property!.name.trim() : "";
+        const roomLabel = hasDisplayText(request.roomNumber) ? request.roomNumber.trim() : "";
+        const servicedDate = hasDisplayText(request.servicedOn ?? request.requestedOn)
+          ? formatDate(request.servicedOn ?? request.requestedOn)
+          : "";
+        const serviceProviderName = hasDisplayText(request.serviceProvider) ? request.serviceProvider.trim() : "";
+        const hasCost = Number.isFinite(request.estimatedCost);
 
         return (
           <InfoCard
@@ -203,27 +273,41 @@ export function MaintenanceScreen() {
             title={request.title}
             rightNode={<Pill label={request.status.replace("_", " ").toUpperCase()} tone={statusTone[request.status]} />}
           >
-            <Text style={styles.desc}>{request.description || "No description added."}</Text>
-            <View style={styles.row}>
-              <Text style={styles.meta}>Property</Text>
-              <Text style={styles.value}>{property?.name ?? request.roomNumber}</Text>
-            </View>
-            <View style={styles.row}>
-              <Text style={styles.meta}>Serviced On</Text>
-              <Text style={styles.value}>{formatDate(request.servicedOn ?? request.requestedOn)}</Text>
-            </View>
+            {descriptionText ? <Text style={styles.desc}>{descriptionText}</Text> : null}
+            {propertyName ? (
+              <View style={styles.row}>
+                <Text style={styles.meta}>Property</Text>
+                <Text style={styles.value}>{propertyName}</Text>
+              </View>
+            ) : null}
+            {roomLabel ? (
+              <View style={styles.row}>
+                <Text style={styles.meta}>Room / Area</Text>
+                <Text style={styles.value}>{roomLabel}</Text>
+              </View>
+            ) : null}
+            {servicedDate ? (
+              <View style={styles.row}>
+                <Text style={styles.meta}>Serviced On</Text>
+                <Text style={styles.value}>{servicedDate}</Text>
+              </View>
+            ) : null}
             <View style={styles.row}>
               <Text style={styles.meta}>Priority</Text>
               <Pill label={request.priority.toUpperCase()} tone={request.priority === "high" ? "danger" : "default"} />
             </View>
-            <View style={styles.row}>
-              <Text style={styles.meta}>Service Provider</Text>
-              <Text style={styles.value}>{request.serviceProvider}</Text>
-            </View>
-            <View style={styles.row}>
-              <Text style={styles.meta}>Estimated / Actual Cost</Text>
-              <Text style={styles.value}>{money(request.estimatedCost)}</Text>
-            </View>
+            {serviceProviderName ? (
+              <View style={styles.row}>
+                <Text style={styles.meta}>Service Provider</Text>
+                <Text style={styles.value}>{serviceProviderName}</Text>
+              </View>
+            ) : null}
+            {hasCost ? (
+              <View style={styles.row}>
+                <Text style={styles.meta}>Estimated / Actual Cost</Text>
+                <Text style={styles.value}>{money(request.estimatedCost)}</Text>
+              </View>
+            ) : null}
             <Pressable style={styles.button} onPress={() => updateRequest(request.id, request.status)} disabled={buttonLoading || request.status === "resolved"}>
               {buttonLoading ? (
                 <ActivityIndicator color={colors.primaryDark} size="small" />
@@ -235,59 +319,106 @@ export function MaintenanceScreen() {
         );
       })}
 
-      <Modal visible={isCreateVisible} transparent animationType="slide" onRequestClose={() => setIsCreateVisible(false)}>
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
+      <Modal visible={isCreateVisible} transparent animationType="slide" onRequestClose={closeCreateModal}>
+        <KeyboardAvoidingView
+          style={styles.modalBackdrop}
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+        >
+          <View style={[styles.modalCard, { paddingBottom: Math.max(insets.bottom, 12) }]}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Log Maintenance</Text>
-              <Pressable style={styles.modalCloseButton} onPress={() => setIsCreateVisible(false)}>
+              <Pressable style={styles.modalCloseButton} onPress={closeCreateModal}>
                 <Text style={styles.modalCloseText}>X</Text>
               </Pressable>
             </View>
-            <Text style={styles.modalMeta}>Attach every repair to a property so reports show rent collected vs maintenance spend.</Text>
 
-            <Text style={styles.fieldLabel}>Property</Text>
-            <ScrollView style={styles.propertyList} nestedScrollEnabled showsVerticalScrollIndicator={false}>
-              {properties.map((property) => {
-                const selected = selectedPropertyId === property.id;
-                return (
+            <ScrollView
+              style={styles.modalScroll}
+              contentContainerStyle={styles.modalScrollContent}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
+              <Text style={styles.modalMeta}>Attach every repair to a property so reports show rent collected vs maintenance spend.</Text>
+
+              <Text style={styles.fieldLabel}>
+                Property <Text style={styles.requiredMark}>*</Text>
+              </Text>
+              {properties.length === 0 ? (
+                <Text style={styles.modalMeta}>No property found. Add one from Dashboard, then reopen this form.</Text>
+              ) : (
+                <>
                   <Pressable
-                    key={property.id}
-                    style={[styles.propertyOption, selected && styles.propertyOptionActive]}
-                    onPress={() => {
-                      setSelectedPropertyId(property.id);
-                      setRoomNumber(property.name);
-                    }}
+                    style={styles.selectField}
+                    onPress={() => setIsPropertyPickerOpen((open) => !open)}
                   >
-                    <View style={styles.propertyOptionTextWrap}>
-                      <Text style={[styles.propertyOptionTitle, selected && styles.propertyOptionTitleActive]}>{property.name}</Text>
-                      <Text style={[styles.propertyOptionMeta, selected && styles.propertyOptionMetaActive]}>{property.address}</Text>
-                    </View>
-                    {selected ? <Text style={styles.selectedMark}>Selected</Text> : null}
+                    <Text style={selectedProperty ? styles.selectValue : styles.selectPlaceholder}>
+                      {selectedProperty?.name ?? "Select property"}
+                    </Text>
+                    <Text style={styles.selectChevron}>{isPropertyPickerOpen ? "▲" : "▼"}</Text>
                   </Pressable>
-                );
-              })}
+                  {isPropertyPickerOpen ? (
+                    <View style={styles.propertyPickerList}>
+                      {properties.map((property) => {
+                        const selected = selectedPropertyId === property.id;
+                        return (
+                          <Pressable
+                            key={property.id}
+                            style={[styles.propertyOption, selected && styles.propertyOptionActive]}
+                            onPress={() => {
+                              setSelectedPropertyId(property.id);
+                              setIsPropertyPickerOpen(false);
+                            }}
+                          >
+                            <View style={styles.propertyOptionTextWrap}>
+                              <Text style={[styles.propertyOptionTitle, selected && styles.propertyOptionTitleActive]}>{property.name}</Text>
+                              <Text style={[styles.propertyOptionMeta, selected && styles.propertyOptionMetaActive]}>{property.address}</Text>
+                            </View>
+                            {selected ? <Text style={styles.selectedMark}>Selected</Text> : null}
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+                  ) : null}
+                </>
+              )}
+
+              <Text style={styles.fieldLabel}>
+                Work title <Text style={styles.requiredMark}>*</Text>
+              </Text>
+              <TextInput style={styles.input} value={title} onChangeText={setTitle} placeholder="e.g. Bathroom plumbing" placeholderTextColor={colors.textMuted} />
+              <Text style={styles.fieldLabel}>
+                Room / area <Text style={styles.requiredMark}>*</Text>
+              </Text>
+              <TextInput style={styles.input} value={roomNumber} onChangeText={setRoomNumber} placeholder="e.g. First floor, Room 204" placeholderTextColor={colors.textMuted} />
+              <Text style={styles.fieldLabel}>
+                Maintenance date <Text style={styles.requiredMark}>*</Text>
+              </Text>
+              <DateField value={servicedOn} onChange={setServicedOn} placeholder="Pick maintenance date" />
+              <Text style={styles.fieldLabel}>Notes (optional)</Text>
+              <TextInput style={[styles.input, styles.textArea]} value={description} onChangeText={setDescription} placeholder="Notes / issue details (optional)" placeholderTextColor={colors.textMuted} multiline />
+              <TextInput style={styles.input} value={serviceProvider} onChangeText={setServiceProvider} placeholder="Service provider (optional)" placeholderTextColor={colors.textMuted} />
+              <Text style={styles.fieldLabel}>
+                Amount <Text style={styles.requiredMark}>*</Text>
+              </Text>
+              <TextInput style={styles.input} value={estimatedCost} onChangeText={setEstimatedCost} placeholder="Amount spent / estimate" placeholderTextColor={colors.textMuted} keyboardType="numeric" />
+
+              <Text style={styles.fieldLabel}>Priority</Text>
+              <View style={styles.priorityRow}>
+                {priorities.map((item) => (
+                  <Pressable key={item} style={[styles.priorityChip, priority === item && styles.priorityChipActive]} onPress={() => setPriority(item)}>
+                    <Text style={[styles.priorityText, priority === item && styles.priorityTextActive]}>{item.toUpperCase()}</Text>
+                  </Pressable>
+                ))}
+              </View>
+
+              {selectedProperty ? <Text style={styles.modalMeta}>Linked property: {selectedProperty.name}</Text> : null}
+              {!canCreate && !createMutation.isPending && saveHint ? (
+                <Text style={styles.helperText}>{saveHint}</Text>
+              ) : null}
             </ScrollView>
 
-            <TextInput style={styles.input} value={title} onChangeText={setTitle} placeholder="Work title, e.g. Bathroom plumbing" placeholderTextColor={colors.textMuted} />
-            <TextInput style={styles.input} value={roomNumber} onChangeText={setRoomNumber} placeholder="Room / area" placeholderTextColor={colors.textMuted} />
-            <DateField value={servicedOn} onChange={setServicedOn} placeholder="Maintenance date" />
-            <TextInput style={[styles.input, styles.textArea]} value={description} onChangeText={setDescription} placeholder="Notes / issue details" placeholderTextColor={colors.textMuted} multiline />
-            <TextInput style={styles.input} value={serviceProvider} onChangeText={setServiceProvider} placeholder="Service provider" placeholderTextColor={colors.textMuted} />
-            <TextInput style={styles.input} value={estimatedCost} onChangeText={setEstimatedCost} placeholder="Amount spent / estimate" placeholderTextColor={colors.textMuted} keyboardType="numeric" />
-
-            <View style={styles.priorityRow}>
-              {priorities.map((item) => (
-                <Pressable key={item} style={[styles.priorityChip, priority === item && styles.priorityChipActive]} onPress={() => setPriority(item)}>
-                  <Text style={[styles.priorityText, priority === item && styles.priorityTextActive]}>{item.toUpperCase()}</Text>
-                </Pressable>
-              ))}
-            </View>
-
-            {selectedProperty ? <Text style={styles.modalMeta}>Selected: {selectedProperty.name}</Text> : null}
-
             <View style={styles.modalActions}>
-              <Pressable style={styles.secondaryButton} onPress={() => setIsCreateVisible(false)}>
+              <Pressable style={styles.secondaryButton} onPress={closeCreateModal}>
                 <Text style={styles.secondaryButtonText}>Cancel</Text>
               </Pressable>
               <Pressable
@@ -298,11 +429,11 @@ export function MaintenanceScreen() {
                     propertyId: selectedPropertyId,
                     roomNumber: roomNumber.trim(),
                     title: title.trim(),
-                    servicedOn: servicedOn.trim(),
+                    requestedOn: servicedOn.trim(),
                     description: description.trim() || undefined,
                     priority,
                     serviceProvider: serviceProvider.trim() || undefined,
-                    estimatedCost: Number(estimatedCost || 0),
+                    estimatedCost: parsedCost,
                   });
                 }}
               >
@@ -310,7 +441,7 @@ export function MaintenanceScreen() {
               </Pressable>
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </Screen>
   );
@@ -447,7 +578,15 @@ const createStyles = ({ colors, fonts, radii, shadows }: AppTheme) => StyleSheet
     gap: 10,
     borderWidth: 1,
     borderColor: colors.border,
-    maxHeight: "92%",
+    height: "90%",
+    maxHeight: "90%",
+  },
+  modalScroll: {
+    flex: 1,
+  },
+  modalScrollContent: {
+    gap: 10,
+    paddingBottom: 8,
   },
   modalHeader: {
     flexDirection: "row",
@@ -486,8 +625,46 @@ const createStyles = ({ colors, fonts, radii, shadows }: AppTheme) => StyleSheet
     fontFamily: fonts.heading,
     fontSize: 12,
   },
+  requiredMark: {
+    color: colors.danger,
+    fontFamily: fonts.heading,
+    fontSize: 12,
+  },
   propertyList: {
     maxHeight: 172,
+  },
+  propertyPickerList: {
+    gap: 8,
+  },
+  selectField: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radii.button,
+    backgroundColor: colors.surfaceAlt,
+    paddingHorizontal: 12,
+    paddingVertical: 11,
+    minHeight: 44,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+  },
+  selectPlaceholder: {
+    color: colors.textMuted,
+    fontFamily: fonts.body,
+    fontSize: 14,
+    flex: 1,
+  },
+  selectValue: {
+    color: colors.textPrimary,
+    fontFamily: fonts.body,
+    fontSize: 14,
+    flex: 1,
+  },
+  selectChevron: {
+    color: colors.textMuted,
+    fontFamily: fonts.heading,
+    fontSize: 12,
   },
   propertyOption: {
     borderRadius: radii.button,
@@ -605,5 +782,10 @@ const createStyles = ({ colors, fonts, radii, shadows }: AppTheme) => StyleSheet
   },
   buttonDisabled: {
     opacity: 0.6,
+  },
+  helperText: {
+    color: colors.textMuted,
+    fontFamily: fonts.body,
+    fontSize: 11,
   },
 });

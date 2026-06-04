@@ -107,7 +107,7 @@ export function TenantDetailsScreen({ route }: Props) {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: queryKeys.tenants.list }),
       queryClient.invalidateQueries({ queryKey: queryKeys.collections.payments }),
-      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.summary }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.summary, refetchType: "all" }),
     ]);
   };
 
