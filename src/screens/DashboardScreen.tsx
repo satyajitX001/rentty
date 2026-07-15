@@ -345,7 +345,7 @@ export function DashboardScreen() {
         {alerts.slice(0, 3).map((alert) => (
           <View key={alert.id} style={styles.signalRow}>
             <View style={styles.flexOne}>
-              <Text style={styles.signalTitle}>{alert.title}</Text>
+              <Text style={styles.signalTitle}>{alert.title || alert.message}</Text>
               <Text style={styles.signalMeta}>{alert.message}</Text>
             </View>
             <Pill label={alert.type.toUpperCase()} tone={alert.type === "payment" ? "warning" : "default"} />

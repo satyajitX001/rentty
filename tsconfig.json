@@ -4,5 +4,6 @@
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "baseUrl": "."
-  }
+  },
+  "exclude": ["node_modules", "rentok-backend", "**/rentok-backend/**", "dist", "babel.config.js"]
 }

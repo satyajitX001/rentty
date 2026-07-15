@@ -1,6 +1,6 @@
 import React, { createContext, ReactNode, useContext, useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { AuthUser } from "../services/api/authService";
+import { AuthUser, logout } from "../services/api/authService";
 import { clearAuthTokens, setAuthFailureHandler, setAuthTokens } from "../services/api/tokenStore";
 import { clearSessionStorage, loadSession, saveSession } from "./sessionStorage";
 
@@ -101,6 +101,11 @@ export function AuthProvider({ children }: Props) {
       },
       signOut: () => {
         queryClient.clear();
+        const tokenToRevoke = refreshToken;
+        if (tokenToRevoke) {
+          // Best-effort server-side revoke; ignore failures (e.g. older backend without /auth/logout).
+          void logout(tokenToRevoke).catch(() => undefined);
+        }
         setAccessToken(null);
         setRefreshToken(null);
         setUser(null);

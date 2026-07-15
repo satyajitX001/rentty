@@ -2,6 +2,19 @@ import { Tenant } from "../../types/models";
 import { httpClient } from "./httpClient";
 import { toArray } from "./normalizers";
 
+// Keep tenant phones consistent with auth phones (stored as +91 format).
+// Safe to call on already-formatted values (won't double-prefix).
+function normalizePhoneToE164(phone: string): string {
+  const digits = phone.replace(/\D/g, "");
+  if (digits.length === 12 && digits.startsWith("91")) {
+    return `+${digits}`;
+  }
+  if (digits.length === 10) {
+    return `+91${digits}`;
+  }
+  return phone.trim();
+}
+
 export type CreateTenantPayload = {
   fullName: string;
   fullAddress: string;
@@ -75,7 +88,10 @@ export async function getTenants(filters: TenantFilters = {}) {
 }
 
 export async function createTenant(payload: CreateTenantPayload) {
-  const data = await httpClient.post<unknown>("/tenants", payload);
+  const data = await httpClient.post<unknown>("/tenants", {
+    ...payload,
+    phone: normalizePhoneToE164(payload.phone),
+  });
 
   if (typeof data === "object" && data !== null && "tenant" in data) {
     return normalizeTenant((data as Record<string, unknown>).tenant);
@@ -85,7 +101,10 @@ export async function createTenant(payload: CreateTenantPayload) {
 }
 
 export async function updateTenant(tenantId: string, payload: UpdateTenantPayload) {
-  const data = await httpClient.put<unknown>(`/tenants/${tenantId}`, payload);
+  const data = await httpClient.put<unknown>(`/tenants/${tenantId}`, {
+    ...payload,
+    ...(payload.phone !== undefined ? { phone: normalizePhoneToE164(payload.phone) } : {}),
+  });
 
   if (typeof data === "object" && data !== null && "tenant" in data) {
     return normalizeTenant((data as Record<string, unknown>).tenant);

@@ -107,3 +107,7 @@ export async function updateProfile(payload: { name: string; phone: string }): P
 export async function changePassword(payload: { currentPassword: string; newPassword: string }): Promise<void> {
   return httpClient.patch("/auth/me/password", payload);
 }
+
+export async function logout(refreshToken: string): Promise<void> {
+  return httpClient.post("/auth/logout", { refreshToken });
+}

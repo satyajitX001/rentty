@@ -43,6 +43,8 @@ function normalizeProperty(input: unknown): Property {
     caretaker: raw.caretaker ? String(raw.caretaker) : undefined,
     caretakerPhone: raw.caretakerPhone ? String(raw.caretakerPhone) : undefined,
     occupancyStatus: status === "occupied" ? "occupied" : "available",
+    totalBeds: raw.totalBeds !== undefined ? Number(raw.totalBeds) : undefined,
+    occupiedBeds: raw.occupiedBeds !== undefined ? Number(raw.occupiedBeds) : undefined,
     active: raw.active !== false
   };
 }

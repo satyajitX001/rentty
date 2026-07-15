@@ -162,7 +162,7 @@ export function MaintenanceScreen() {
 
   const parsedCost = Number(estimatedCost);
   const hasProperty = selectedPropertyId.length > 0;
-  const hasTitle = title.trim().length >= 2;
+  const hasTitle = title.trim().length >= 3;
   const hasRoom = roomNumber.trim().length >= 1;
   const hasDate = servicedOn.trim().length > 0;
   const hasAmount = estimatedCost.trim().length > 0 && Number.isFinite(parsedCost) && parsedCost >= 0;
@@ -173,7 +173,7 @@ export function MaintenanceScreen() {
       ? "No property found. Add a property from Dashboard first."
       : "Tap Select property and choose one from the list."
     : !hasTitle
-      ? "Enter a work title (at least 2 characters)."
+      ? "Enter a work title (at least 3 characters)."
       : !hasRoom
         ? "Enter room / area."
         : !hasDate
