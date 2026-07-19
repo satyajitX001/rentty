@@ -99,7 +99,7 @@ export function DashboardScreen() {
   const [tenantRent, setTenantRent] = useState("");
   const [tenantRentDay, setTenantRentDay] = useState("");
   const [tenantJoinedOn, setTenantJoinedOn] = useState("");
-  const [tenantAdvance, setTenantAdvance] = useState("");
+  const [tenantSecurityDeposit, setTenantSecurityDeposit] = useState("");
   const [tenantOpeningDue, setTenantOpeningDue] = useState("");
 
   const [caretakerName, setCaretakerName] = useState("");
@@ -128,7 +128,7 @@ export function DashboardScreen() {
       setTenantRent("");
       setTenantRentDay("");
       setTenantJoinedOn("");
-      setTenantAdvance("");
+      setTenantSecurityDeposit("");
       setTenantOpeningDue("");
       setIsTenantModalVisible(false);
       setIsPropertyDetailVisible(false);
@@ -470,7 +470,7 @@ export function DashboardScreen() {
               onChange={setTenantJoinedOn}
               placeholder="Joined on"
             />
-            <TextInput style={styles.input} placeholder="Advance amount" placeholderTextColor={colors.textMuted} keyboardType="numeric" value={tenantAdvance} onChangeText={setTenantAdvance} />
+            <TextInput style={styles.input} placeholder="Security deposit" placeholderTextColor={colors.textMuted} keyboardType="numeric" value={tenantSecurityDeposit} onChangeText={setTenantSecurityDeposit} />
             <TextInput style={styles.input} placeholder="Opening due amount" placeholderTextColor={colors.textMuted} keyboardType="numeric" value={tenantOpeningDue} onChangeText={setTenantOpeningDue} />
             {createTenantMutation.isError ? <Text style={styles.warningText}>{getErrorMessage(createTenantMutation.error)}</Text> : null}
             <View style={styles.modalActions}>
@@ -490,7 +490,7 @@ export function DashboardScreen() {
                     monthlyRent: Number(tenantRent),
                     rentDueDay: Number(tenantRentDay),
                     joinedOn: tenantJoinedOn.trim(),
-                    advanceAmount: Number(tenantAdvance || 0),
+                    securityDeposit: Number(tenantSecurityDeposit || 0),
                     openingDueAmount: Number(tenantOpeningDue || 0),
                   });
                 }}

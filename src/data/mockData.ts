@@ -113,7 +113,7 @@ export const payments: Payment[] = [
     paidOn: "2026-04-02",
     mode: "BANK_TRANSFER",
     utr: "UTR982214",
-    notes: "Advance payment"
+    notes: "Early rent payment"
   },
   {
     id: "pay-003",

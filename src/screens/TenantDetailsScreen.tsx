@@ -90,7 +90,7 @@ export function TenantDetailsScreen({ route }: Props) {
   const [tenantRent, setTenantRent] = useState(String(tenant.monthlyRent));
   const [tenantRentDay, setTenantRentDay] = useState(String(tenant.rentDueDay ?? 1));
   const [tenantJoinedOn, setTenantJoinedOn] = useState(toDateInput(tenant.joinedOn));
-  const [tenantAdvance, setTenantAdvance] = useState(String(tenant.advanceAmount ?? 0));
+  const [tenantSecurityDeposit, setTenantSecurityDeposit] = useState(String(tenant.securityDeposit ?? tenant.advanceAmount ?? 0));
   const [tenantOpeningDue, setTenantOpeningDue] = useState(String(tenant.openingDueAmount ?? 0));
 
   // Remove tenant form state
@@ -188,7 +188,7 @@ export function TenantDetailsScreen({ route }: Props) {
     setTenantRent(String(tenant.monthlyRent));
     setTenantRentDay(String(tenant.rentDueDay ?? 1));
     setTenantJoinedOn(toDateInput(tenant.joinedOn));
-    setTenantAdvance(String(tenant.advanceAmount ?? 0));
+    setTenantSecurityDeposit(String(tenant.securityDeposit ?? tenant.advanceAmount ?? 0));
     setTenantOpeningDue(String(tenant.openingDueAmount ?? 0));
     setIsEditModalVisible(true);
   };
@@ -391,7 +391,7 @@ export function TenantDetailsScreen({ route }: Props) {
             <TextInput style={styles.input} value={tenantRent} onChangeText={setTenantRent} placeholder="Monthly rent" placeholderTextColor={colors.textMuted} keyboardType="numeric" />
             <TextInput style={styles.input} value={tenantRentDay} onChangeText={setTenantRentDay} placeholder="Due day" placeholderTextColor={colors.textMuted} keyboardType="numeric" />
             <DateField value={tenantJoinedOn} onChange={setTenantJoinedOn} placeholder="Joined on" />
-            <TextInput style={styles.input} value={tenantAdvance} onChangeText={setTenantAdvance} placeholder="Advance amount" placeholderTextColor={colors.textMuted} keyboardType="numeric" />
+            <TextInput style={styles.input} value={tenantSecurityDeposit} onChangeText={setTenantSecurityDeposit} placeholder="Security deposit" placeholderTextColor={colors.textMuted} keyboardType="numeric" />
             <TextInput style={styles.input} value={tenantOpeningDue} onChangeText={setTenantOpeningDue} placeholder="Opening due amount" placeholderTextColor={colors.textMuted} keyboardType="numeric" />
             {updateTenantMutation.isError ? <Text style={styles.error}>{getErrorMessage(updateTenantMutation.error)}</Text> : null}
             <View style={styles.modalActions}>
@@ -411,7 +411,7 @@ export function TenantDetailsScreen({ route }: Props) {
                       monthlyRent: Number(tenantRent),
                       rentDueDay: Number(tenantRentDay),
                       joinedOn: tenantJoinedOn.trim(),
-                      advanceAmount: Number(tenantAdvance || 0),
+                      securityDeposit: Number(tenantSecurityDeposit || 0),
                       openingDueAmount: Number(tenantOpeningDue || 0),
                     },
                   });
