@@ -45,6 +45,7 @@ export const tenants: Tenant[] = [
     leaseEnd: "2026-06-30",
     monthlyRent: 9500,
     dueAmount: 0,
+    creditBalance: 0,
     status: "active",
     kycVerified: true
   },
@@ -59,6 +60,7 @@ export const tenants: Tenant[] = [
     leaseEnd: "2026-11-09",
     monthlyRent: 9800,
     dueAmount: 9800,
+    creditBalance: 0,
     status: "active",
     kycVerified: true
   },
@@ -73,6 +75,7 @@ export const tenants: Tenant[] = [
     leaseEnd: "2026-08-31",
     monthlyRent: 8600,
     dueAmount: 4300,
+    creditBalance: 0,
     status: "active",
     kycVerified: false
   },
@@ -87,6 +90,7 @@ export const tenants: Tenant[] = [
     leaseEnd: "2026-04-30",
     monthlyRent: 9100,
     dueAmount: 0,
+    creditBalance: 0,
     status: "notice",
     kycVerified: true
   }
@@ -351,6 +355,11 @@ export const dashboardSummary: DashboardSummary = {
   activeTenants: tenants.filter((t) => t.status === "active").length,
   pendingDues: tenants.reduce((sum, t) => sum + t.dueAmount, 0),
   monthCollection: payments.reduce((sum, p) => sum + p.amount, 0),
+  rentEarned: 0,
+  totalCredit: tenants.reduce((sum, t) => sum + (t.creditBalance ?? 0), 0),
+  totalDepositsHeld: tenants.reduce((sum, t) => sum + (t.advanceAmount ?? 0), 0),
+  prepaidRent: 0,
+  outstandingVacatedDues: 0,
   openMaintenance: maintenanceRequests.filter((m) => m.status !== "resolved").length,
   monthExpenses: expenses.reduce((sum, e) => sum + e.amount, 0)
 };

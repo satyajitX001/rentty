@@ -9,6 +9,39 @@ export type Property = {
   active: boolean;
   totalBeds?: number;
   occupiedBeds?: number;
+  prorationMode?: "full_month" | "pro_rata_daily" | "next_cycle";  // Default: "pro_rata_daily"
+  graceDays?: number;
+};
+
+export type RentHistoryEntry = {
+  effectiveFrom: string;  // YYYY-MM-DD
+  monthlyRent: number;
+};
+
+export type LedgerEntryType =
+  | "OPENING_BALANCE"
+  | "RENT_CHARGE"
+  | "PAYMENT"
+  | "CREDIT_CREATED"
+  | "CREDIT_APPLIED"
+  | "ADVANCE_RECEIVED"
+  | "ADVANCE_REFUND"
+  | "ADVANCE_ADJUSTMENT"
+  | "MAINTENANCE_CHARGE"
+  | "LATE_FEE"
+  | "RENT_REVISION";
+
+export type LedgerEntry = {
+  id: string;
+  tenantId: string;
+  propertyId: string;
+  transactionType: LedgerEntryType;
+  amount: number;
+  effectiveDate: string;
+  dueMonth?: string;
+  paymentId?: string;
+  notes?: string;
+  runningBalance: number;
 };
 
 export type Tenant = {
@@ -25,6 +58,9 @@ export type Tenant = {
   advanceAmount?: number;
   openingDueAmount?: number;
   dueAmount: number;
+  creditBalance: number;           // Tracks overpayments / credit carried forward (required, not optional)
+  rentHistory?: RentHistoryEntry[];
+  ledger?: LedgerEntry[];
   status: "active" | "notice" | "vacated" | "inactive";
   kycVerified: boolean;
   leaseStart?: string;
@@ -46,6 +82,32 @@ export type Payment = {
   utr?: string;
   notes?: string;
   receiptNo?: string;
+  allocations?: PaymentAllocation[];
+};
+
+export type PaymentAllocation = {
+  month: string;
+  amountApplied: number;
+  type: "RENT_CHARGE" | "CREDIT_APPLIED" | "OPENING_BALANCE";
+};
+
+export type CollectPaymentResponse = {
+  payment: Payment;
+  receipt: {
+    receiptNo: string;
+    tenantName?: string;
+    amount?: number;
+    paidOn?: string;
+    balanceDue: number;
+    creditBalance: number;
+  };
+  allocations: PaymentAllocation[];
+  ledgerEntries: Array<{
+    type: LedgerEntryType;
+    amount: number;
+    runningBalance: number;
+    dueMonth?: string;
+  }>;
 };
 
 export type MaintenanceRequest = {
@@ -120,6 +182,22 @@ export type ReportCard = {
   points: string[];
 };
 
+export type SettlementResult = {
+  tenantId: string;
+  tenantName: string;
+  vacatedOn: string;
+  outstandingRent: number;
+  depositHeld: number;
+  creditBalance: number;
+  maintenanceCharges: number;
+  damageCharges: number;
+  refundAmount: number;
+  settlementDetails: Array<{
+    description: string;
+    amount: number;
+  }>;
+};
+
 export type DashboardSummary = {
   totalProperties: number;
   occupiedProperties?: number;
@@ -127,6 +205,11 @@ export type DashboardSummary = {
   activeTenants: number;
   pendingDues: number;
   monthCollection: number;
+  rentEarned: number;           // Rent charges generated in period
+  totalCredit: number;          // Sum of all tenant credit balances
+  totalDepositsHeld: number;    // Sum of all advanceAmount
+  prepaidRent: number;          // Payments for future months
+  outstandingVacatedDues: number; // Dues from vacated tenants
   openMaintenance: number;
   monthExpenses: number;
   occupiedBeds?: number;

@@ -8,7 +8,6 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -20,6 +19,7 @@ import { InfoCard } from "../components/InfoCard";
 import { Pill } from "../components/Pill";
 import { Screen } from "../components/Screen";
 import { DateField } from "../components/DateField";
+import { FloatingLabelInput } from "../components/FloatingLabelInput";
 import { getDashboardSummary } from "../services/api/dashboardService";
 import { getNotifications } from "../services/api/notificationService";
 import {
@@ -33,6 +33,7 @@ import { useAuth } from "../store/AuthContext";
 import { AppTheme, useAppTheme, useThemedStyles } from "../theme";
 import { DashboardSummary, Property } from "../types/models";
 import { AppStackParamList } from "../navigation/AppStackNavigator";
+import { formatDate } from "../utils/date";
 import { scale, verticalScale, moderateScale } from "../utils/scale";
 
 const currency = (value: number) => `INR ${value.toLocaleString("en-IN")}`;
@@ -44,6 +45,11 @@ const emptySummary: DashboardSummary = {
   activeTenants: 0,
   pendingDues: 0,
   monthCollection: 0,
+  rentEarned: 0,
+  totalCredit: 0,
+  totalDepositsHeld: 0,
+  prepaidRent: 0,
+  outstandingVacatedDues: 0,
   openMaintenance: 0,
   monthExpenses: 0,
 };
@@ -51,10 +57,6 @@ const emptySummary: DashboardSummary = {
 function getErrorMessage(error: unknown) {
   if (error instanceof Error) return error.message;
   return "Unable to load data.";
-}
-
-function formatDate(value?: string) {
-  return value ? value.slice(0, 10) : "-";
 }
 
 function initials(name?: string) {
@@ -77,6 +79,8 @@ export function DashboardScreen() {
     queryKey: queryKeys.dashboard.summary,
     queryFn: getDashboardSummary,
     staleTime: 0,
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
   });
   const propertiesQuery = useQuery({ queryKey: queryKeys.properties.list, queryFn: getProperties });
   const alertsQuery = useQuery({ queryKey: queryKeys.notifications.list, queryFn: getNotifications });
@@ -107,9 +111,9 @@ export function DashboardScreen() {
 
   const invalidateOperationalQueries = async () => {
     await Promise.all([
-      queryClient.invalidateQueries({ queryKey: queryKeys.properties.list, refetchType: "all" }),
-      queryClient.invalidateQueries({ queryKey: queryKeys.tenants.list, refetchType: "all" }),
-      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.summary, refetchType: "all" }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.properties.list, exact: true }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.tenants.list, exact: true }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.summary, exact: true }),
     ]);
   };
 
@@ -173,10 +177,19 @@ export function DashboardScreen() {
 
   const selectedPropertyOccupied =
     (selectedProperty?.occupancyStatus ?? "available") === "occupied";
-  const financeMax = Math.max(summary.monthCollection, summary.monthExpenses, summary.pendingDues, 1);
+  const financeMax = Math.max(
+    summary.monthCollection,
+    summary.monthExpenses,
+    summary.pendingDues,
+    summary.rentEarned,
+    summary.totalCredit,
+    1
+  );
   const collectionWidth = `${Math.max(6, (summary.monthCollection / financeMax) * 100)}%` as DimensionValue;
+  const earnedWidth = `${Math.max(6, (summary.rentEarned / financeMax) * 100)}%` as DimensionValue;
   const expenseWidth = `${Math.max(6, (summary.monthExpenses / financeMax) * 100)}%` as DimensionValue;
   const dueWidth = `${Math.max(6, (summary.pendingDues / financeMax) * 100)}%` as DimensionValue;
+  const creditWidth = `${Math.max(6, (summary.totalCredit / financeMax) * 100)}%` as DimensionValue;
 
   const canCreateTenant =
     Boolean(selectedProperty?.id) &&
@@ -226,29 +239,46 @@ export function DashboardScreen() {
           <Text style={styles.heroMetricSub}>Keep this low with timely follow-ups.</Text>
         </LinearGradient>
         <InfoCard title="Collection This Month" value={currency(summary.monthCollection)} style={styles.metricCard} />
+        <InfoCard title="Rent Earned" value={currency(summary.rentEarned)} style={styles.metricCard} />
+        <InfoCard title="Total Credit" value={currency(summary.totalCredit)} style={styles.metricCard} />
+        <InfoCard title="Deposits Held" value={currency(summary.totalDepositsHeld)} style={styles.metricCard} />
       </View>
 
       <InfoCard title="Money Flow">
         <View style={styles.chartRow}>
-          <Text style={styles.chartLabel}>Collected</Text>
+          <Text style={styles.chartLabel}>Collected (Cash)</Text>
           <View style={styles.chartTrack}>
             <View style={[styles.chartBar, styles.chartBarCollection, { width: collectionWidth }]} />
           </View>
           <Text style={styles.chartValue}>{currency(summary.monthCollection)}</Text>
         </View>
         <View style={styles.chartRow}>
-          <Text style={styles.chartLabel}>Spent</Text>
+          <Text style={styles.chartLabel}>Earned (Rent Charges)</Text>
           <View style={styles.chartTrack}>
-            <View style={[styles.chartBar, styles.chartBarExpense, { width: expenseWidth }]} />
+            <View style={[styles.chartBar, styles.chartBarEarned, { width: earnedWidth }]} />
           </View>
-          <Text style={styles.chartValue}>{currency(summary.monthExpenses)}</Text>
+          <Text style={styles.chartValue}>{currency(summary.rentEarned)}</Text>
         </View>
         <View style={styles.chartRow}>
-          <Text style={styles.chartLabel}>Pending</Text>
+          <Text style={styles.chartLabel}>Pending Dues</Text>
           <View style={styles.chartTrack}>
             <View style={[styles.chartBar, styles.chartBarDue, { width: dueWidth }]} />
           </View>
           <Text style={styles.chartValue}>{currency(summary.pendingDues)}</Text>
+        </View>
+        <View style={styles.chartRow}>
+          <Text style={styles.chartLabel}>Credit Available</Text>
+          <View style={styles.chartTrack}>
+            <View style={[styles.chartBar, styles.chartBarCredit, { width: creditWidth }]} />
+          </View>
+          <Text style={styles.chartValue}>{currency(summary.totalCredit)}</Text>
+        </View>
+        <View style={styles.chartRow}>
+          <Text style={styles.chartLabel}>Spent (Expenses)</Text>
+          <View style={styles.chartTrack}>
+            <View style={[styles.chartBar, styles.chartBarExpense, { width: expenseWidth }]} />
+          </View>
+          <Text style={styles.chartValue}>{currency(summary.monthExpenses)}</Text>
         </View>
       </InfoCard>
 
@@ -287,14 +317,6 @@ export function DashboardScreen() {
                 </View>
                 <Text style={styles.propertyLocation} numberOfLines={1}>{property.address}</Text>
                 <View style={styles.propertyMetaRow}>
-                  {typeof property.occupiedBeds === "number" || typeof property.totalBeds === "number" ? (
-                    <View style={styles.propertyMetaPill}>
-                      <Ionicons name="people-outline" size={13} color={colors.textMuted} />
-                      <Text style={styles.propertyMetaText}>
-                        {property.occupiedBeds ?? 0}/{property.totalBeds ?? 0} beds
-                      </Text>
-                    </View>
-                  ) : null}
                   {property.caretaker ? (
                     <View style={styles.propertyMetaPill}>
                       <Ionicons name="person-circle-outline" size={13} color={colors.textMuted} />
@@ -460,18 +482,19 @@ export function DashboardScreen() {
               </Pressable>
             </View>
             <Text style={styles.modalMeta}>{selectedProperty?.name ?? ""}</Text>
-            <TextInput style={styles.input} placeholder="Tenant name" placeholderTextColor={colors.textMuted} value={tenantName} onChangeText={setTenantName} />
-            <TextInput style={styles.input} placeholder="Tenant address" placeholderTextColor={colors.textMuted} value={tenantAddress} onChangeText={setTenantAddress} />
-            <TextInput style={styles.input} placeholder="Mobile number" placeholderTextColor={colors.textMuted} keyboardType="phone-pad" value={tenantPhone} onChangeText={setTenantPhone} />
-            <TextInput style={styles.input} placeholder="Monthly rent" placeholderTextColor={colors.textMuted} keyboardType="numeric" value={tenantRent} onChangeText={setTenantRent} />
-            <TextInput style={styles.input} placeholder="Pay day in month (1-31)" placeholderTextColor={colors.textMuted} keyboardType="numeric" value={tenantRentDay} onChangeText={setTenantRentDay} />
+            <FloatingLabelInput label="Tenant name" value={tenantName} onChangeText={setTenantName} required />
+            <FloatingLabelInput label="Residential address" value={tenantAddress} onChangeText={setTenantAddress} multiline required />
+            <FloatingLabelInput label="Mobile number" value={tenantPhone} onChangeText={setTenantPhone} keyboardType="phone-pad" required />
+            <FloatingLabelInput label="Monthly rent" value={tenantRent} onChangeText={setTenantRent} keyboardType="numeric" required />
+            <FloatingLabelInput label="Rent due day" value={tenantRentDay} onChangeText={setTenantRentDay} keyboardType="numeric" hint="1–31" required />
             <DateField
               value={tenantJoinedOn}
               onChange={setTenantJoinedOn}
               placeholder="Joined on"
+              label="Joined on"
             />
-            <TextInput style={styles.input} placeholder="Advance amount" placeholderTextColor={colors.textMuted} keyboardType="numeric" value={tenantAdvance} onChangeText={setTenantAdvance} />
-            <TextInput style={styles.input} placeholder="Opening due amount" placeholderTextColor={colors.textMuted} keyboardType="numeric" value={tenantOpeningDue} onChangeText={setTenantOpeningDue} />
+            <FloatingLabelInput label="Advance amount" value={tenantAdvance} onChangeText={setTenantAdvance} keyboardType="numeric" />
+            <FloatingLabelInput label="Opening due amount" value={tenantOpeningDue} onChangeText={setTenantOpeningDue} keyboardType="numeric" />
             {createTenantMutation.isError ? <Text style={styles.warningText}>{getErrorMessage(createTenantMutation.error)}</Text> : null}
             <View style={styles.modalActions}>
               <Pressable style={styles.secondaryButton} onPress={() => setIsTenantModalVisible(false)}>
@@ -519,8 +542,8 @@ export function DashboardScreen() {
               </Pressable>
             </View>
             <Text style={styles.modalMeta}>{selectedProperty?.name ?? ""}</Text>
-            <TextInput style={styles.input} placeholder="Caretaker name (optional)" placeholderTextColor={colors.textMuted} value={caretakerName} onChangeText={setCaretakerName} />
-            <TextInput style={styles.input} placeholder="Caretaker mobile" placeholderTextColor={colors.textMuted} keyboardType="phone-pad" value={caretakerPhone} onChangeText={setCaretakerPhone} />
+            <FloatingLabelInput label="Caretaker name" value={caretakerName} onChangeText={setCaretakerName} />
+            <FloatingLabelInput label="Caretaker mobile" value={caretakerPhone} onChangeText={setCaretakerPhone} keyboardType="phone-pad" required />
             {assignCaretakerMutation.isError ? <Text style={styles.warningText}>{getErrorMessage(assignCaretakerMutation.error)}</Text> : null}
             <View style={styles.modalActions}>
               <Pressable style={styles.secondaryButton} onPress={() => setIsCaretakerModalVisible(false)}>
@@ -640,6 +663,12 @@ const createStyles = ({ colors, fonts, radii, shadows }: AppTheme) => StyleSheet
   },
   chartBarDue: {
     backgroundColor: colors.primary,
+  },
+  chartBarEarned: {
+    backgroundColor: "#8B5CF6", // Purple for earned rent
+  },
+  chartBarCredit: {
+    backgroundColor: colors.success,
   },
   chartValue: {
     color: colors.textMuted,

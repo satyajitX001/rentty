@@ -6,11 +6,13 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { InfoCard } from "../components/InfoCard";
 import { Screen } from "../components/Screen";
 import { Pill } from "../components/Pill";
+import { DateField } from "../components/DateField";
 import { getPayments } from "../services/api/collectionService";
 import { queryKeys } from "../services/api/queryKeys";
-import { getTenants, removeTenant } from "../services/api/tenantService";
+import { getTenants, removeTenant, calculateSettlement } from "../services/api/tenantService";
 import { AppTheme, useAppTheme, useThemedStyles } from "../theme";
 import { AppStackParamList } from "../navigation/AppStackNavigator";
+import { formatDate } from "../utils/date";
 
 const money = (value: number) => `INR ${value.toLocaleString("en-IN")}`;
 
@@ -26,7 +28,10 @@ export function PropertyActionsScreen({ navigation, route }: Props) {
   const { property } = route.params;
   const queryClient = useQueryClient();
   const [isRemoveModalVisible, setIsRemoveModalVisible] = useState(false);
+  const [isSettlementModalVisible, setIsSettlementModalVisible] = useState(false);
   const [removeReason, setRemoveReason] = useState("");
+  const [vacatedOn, setVacatedOn] = useState("");
+  const [settlementData, setSettlementData] = useState<import("../types/models").SettlementResult | null>(null);
   const [tenantRemovedLocally, setTenantRemovedLocally] = useState(false);
 
   const tenantsQuery = useQuery({
@@ -51,19 +56,31 @@ export function PropertyActionsScreen({ navigation, route }: Props) {
 
   const invalidatePropertyFlow = async () => {
     await Promise.all([
-      queryClient.invalidateQueries({ queryKey: queryKeys.properties.list }),
-      queryClient.invalidateQueries({ queryKey: queryKeys.tenants.list }),
-      queryClient.invalidateQueries({ queryKey: queryKeys.collections.payments }),
-      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.summary, refetchType: "all" }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.properties.list, exact: true }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.tenants.list, exact: true }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.collections.payments, exact: true }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.summary, exact: true }),
     ]);
   };
 
+  const fetchSettlement = async () => {
+    if (!currentTenant?.id) return;
+    try {
+      const result = await calculateSettlement(currentTenant.id, vacatedOn.trim() || new Date().toISOString().slice(0, 10));
+      setSettlementData(result);
+      setIsSettlementModalVisible(true);
+    } catch (error) {
+      // Error handled by modal
+    }
+  };
+
   const removeTenantMutation = useMutation({
-    mutationFn: ({ tenantId, reason }: { tenantId: string; reason: string }) =>
-      removeTenant(tenantId, { reason }),
+    mutationFn: ({ tenantId, reason, vacatedOnDate }: { tenantId: string; reason: string; vacatedOnDate?: string }) =>
+      removeTenant(tenantId, { reason, vacatedOn: vacatedOnDate }),
     onSuccess: async () => {
       setTenantRemovedLocally(true);
       setRemoveReason("");
+      setVacatedOn("");
       setIsRemoveModalVisible(false);
       await invalidatePropertyFlow();
       Alert.alert("Tenant removed", "The property is now available for a new tenant.");
@@ -114,6 +131,12 @@ export function PropertyActionsScreen({ navigation, route }: Props) {
             <Text style={styles.infoLabel}>Current Tenant</Text>
             <Text style={styles.infoValue}>{currentTenant && isOccupied ? currentTenant.fullName : "None"}</Text>
           </View>
+          {currentTenant && isOccupied && (currentTenant.creditBalance ?? 0) > 0 ? (
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Credit Balance</Text>
+              <Text style={[styles.infoValue, styles.credit]}>+ {money(currentTenant.creditBalance ?? 0)}</Text>
+            </View>
+          ) : null}
         </InfoCard>
 
         <InfoCard title="Manage Property">
@@ -184,7 +207,7 @@ export function PropertyActionsScreen({ navigation, route }: Props) {
               <View style={styles.actionContent}>
                 <Text style={styles.paymentTitle}>{money(payment.amount)}</Text>
                 <Text style={styles.actionSubtitle}>
-                  {tenantNameById.get(payment.tenantId) ?? "Past tenant"} | Paid {payment.paidOn.slice(0, 10)} | Due {payment.dueMonth}
+                  {tenantNameById.get(payment.tenantId) ?? "Past tenant"} | Paid {formatDate(payment.paidOn)}
                 </Text>
                 <Text style={styles.actionSubtitle}>{payment.receiptNo ?? payment.id}</Text>
               </View>
@@ -207,6 +230,15 @@ export function PropertyActionsScreen({ navigation, route }: Props) {
               This will not delete tenant history or payments. The tenant will be marked vacated and this property becomes available.
             </Text>
             <Text style={styles.modalTenantName}>{currentTenant?.fullName}</Text>
+            {currentTenant && (currentTenant.creditBalance ?? 0) > 0 ? (
+              <View style={styles.refundInfo}>
+                <Text style={styles.refundLabel}>Credit Balance to Refund:</Text>
+                <Text style={styles.refundAmount}>+ {money(currentTenant.creditBalance ?? 0)}</Text>
+              </View>
+            ) : null}
+            <Pressable style={styles.settlementPreviewButton} onPress={fetchSettlement}>
+              <Text style={styles.settlementPreviewText}>Preview Settlement</Text>
+            </Pressable>
             <TextInput
               style={[styles.input, styles.textArea]}
               value={removeReason}
@@ -215,6 +247,7 @@ export function PropertyActionsScreen({ navigation, route }: Props) {
               placeholderTextColor={colors.textMuted}
               multiline
             />
+            <DateField value={vacatedOn} onChange={setVacatedOn} placeholder="Vacated on" label="Vacated on" />
             <View style={styles.modalActions}>
               <Pressable style={styles.secondaryButton} onPress={() => setIsRemoveModalVisible(false)}>
                 <Text style={styles.secondaryButtonText}>Cancel</Text>
@@ -224,7 +257,7 @@ export function PropertyActionsScreen({ navigation, route }: Props) {
                 disabled={!canRemoveTenant || removeTenantMutation.isPending}
                 onPress={() => {
                   if (!currentTenant?.id) return;
-                  removeTenantMutation.mutate({ tenantId: currentTenant.id, reason: removeReason.trim() });
+                  removeTenantMutation.mutate({ tenantId: currentTenant.id, reason: removeReason.trim(), vacatedOnDate: vacatedOn.trim() || undefined });
                 }}
               >
                 {removeTenantMutation.isPending ? (
@@ -232,6 +265,71 @@ export function PropertyActionsScreen({ navigation, route }: Props) {
                 ) : (
                   <Text style={styles.primaryButtonText}>Confirm Remove</Text>
                 )}
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Settlement Preview Modal */}
+      <Modal visible={isSettlementModalVisible} transparent animationType="slide" onRequestClose={() => setIsSettlementModalVisible(false)}>
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.modalCard, styles.largeModal]}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Settlement Preview</Text>
+              <Pressable style={styles.modalCloseButton} onPress={() => setIsSettlementModalVisible(false)}>
+                <Text style={styles.modalCloseText}>X</Text>
+              </Pressable>
+            </View>
+            <Text style={styles.modalMeta}>{currentTenant?.fullName}</Text>
+            {settlementData ? (
+              <View style={styles.settlementContent}>
+                <View style={styles.settlementRow}>
+                  <Text style={styles.settlementLabel}>Outstanding Rent</Text>
+                  <Text style={styles.settlementValue}>{money(settlementData.outstandingRent)}</Text>
+                </View>
+                <View style={styles.settlementRow}>
+                  <Text style={styles.settlementLabel}>Deposit Held</Text>
+                  <Text style={styles.settlementValue}>{money(settlementData.depositHeld)}</Text>
+                </View>
+                <View style={styles.settlementRow}>
+                  <Text style={styles.settlementLabel}>Credit Balance</Text>
+                  <Text style={[styles.settlementValue, styles.credit]}>+ {money(settlementData.creditBalance)}</Text>
+                </View>
+                <View style={styles.settlementRow}>
+                  <Text style={styles.settlementLabel}>Maintenance Charges</Text>
+                  <Text style={styles.settlementValue}>{money(settlementData.maintenanceCharges)}</Text>
+                </View>
+                <View style={styles.settlementRow}>
+                  <Text style={styles.settlementLabel}>Damage Charges</Text>
+                  <Text style={styles.settlementValue}>{money(settlementData.damageCharges)}</Text>
+                </View>
+                <View style={[styles.settlementRow, styles.settlementTotal]}>
+                  <Text style={styles.settlementLabel}>Refund Amount</Text>
+                  <Text style={[styles.settlementValue, settlementData.refundAmount >= 0 ? styles.success : styles.danger]}>
+                    {money(settlementData.refundAmount)}
+                  </Text>
+                </View>
+                {settlementData.settlementDetails && settlementData.settlementDetails.length > 0 ? (
+                  <View style={styles.settlementDetails}>
+                    <Text style={styles.settlementDetailTitle}>Breakdown:</Text>
+                    {settlementData.settlementDetails.map((detail, idx) => (
+                      <View key={idx} style={styles.settlementDetailRow}>
+                        <Text style={styles.settlementDetailLabel}>{detail.description}</Text>
+                        <Text style={[styles.settlementDetailValue, detail.amount >= 0 ? styles.success : styles.danger]}>
+                          {money(detail.amount)}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                ) : null}
+              </View>
+            ) : (
+              <ActivityIndicator color={colors.primary} />
+            )}
+            <View style={styles.modalActions}>
+              <Pressable style={styles.secondaryButton} onPress={() => setIsSettlementModalVisible(false)}>
+                <Text style={styles.secondaryButtonText}>Close</Text>
               </Pressable>
             </View>
           </View>
@@ -245,13 +343,11 @@ const createStyles = ({ colors, fonts, radii, shadows }: AppTheme) => StyleSheet
   container: {
     flex: 1,
     backgroundColor: colors.page,
-    gap: 12,
   },
   infoRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    gap: 10,
     paddingVertical: 4,
   },
   infoLabel: {
@@ -266,10 +362,34 @@ const createStyles = ({ colors, fonts, radii, shadows }: AppTheme) => StyleSheet
     flex: 1,
     textAlign: "right",
   },
+  credit: {
+    color: colors.success,
+  },
+  refundInfo: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: colors.success + "15",
+    borderRadius: radii.button,
+    borderWidth: 1,
+    borderColor: colors.success,
+    marginBottom: 8,
+  },
+  refundLabel: {
+    color: colors.success,
+    fontFamily: fonts.heading,
+    fontSize: 13,
+  },
+  refundAmount: {
+    color: colors.success,
+    fontFamily: fonts.display,
+    fontSize: 16,
+  },
   actionButton: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
     paddingVertical: 14,
     paddingHorizontal: 4,
     borderBottomWidth: 1,
@@ -282,13 +402,13 @@ const createStyles = ({ colors, fonts, radii, shadows }: AppTheme) => StyleSheet
     backgroundColor: colors.primarySoft,
     alignItems: "center",
     justifyContent: "center",
+    marginRight: 12,
   },
   dangerIcon: {
     backgroundColor: "#FEE2E2",
   },
   actionContent: {
     flex: 1,
-    gap: 2,
   },
   actionTitle: {
     color: colors.textPrimary,
@@ -312,7 +432,6 @@ const createStyles = ({ colors, fonts, radii, shadows }: AppTheme) => StyleSheet
   paymentRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
     paddingVertical: 8,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
@@ -337,7 +456,6 @@ const createStyles = ({ colors, fonts, radii, shadows }: AppTheme) => StyleSheet
     borderTopLeftRadius: radii.card,
     borderTopRightRadius: radii.card,
     padding: 16,
-    gap: 10,
     borderWidth: 1,
     borderColor: colors.border,
   },
@@ -345,7 +463,6 @@ const createStyles = ({ colors, fonts, radii, shadows }: AppTheme) => StyleSheet
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    gap: 10,
   },
   modalTitle: {
     color: colors.textPrimary,
@@ -395,7 +512,8 @@ const createStyles = ({ colors, fonts, radii, shadows }: AppTheme) => StyleSheet
   },
   modalActions: {
     flexDirection: "row",
-    gap: 8,
+    marginLeft: -4,
+    marginRight: -4,
   },
   secondaryButton: {
     flex: 1,
@@ -426,5 +544,80 @@ const createStyles = ({ colors, fonts, radii, shadows }: AppTheme) => StyleSheet
     color: "#FFFFFF",
     fontFamily: fonts.heading,
     fontSize: 13,
+  },
+  settlementPreviewButton: {
+    alignSelf: "flex-start",
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: colors.primarySoft,
+    borderRadius: radii.button,
+    marginBottom: 8,
+  },
+  settlementPreviewText: {
+    color: colors.primaryDark,
+    fontFamily: fonts.heading,
+    fontSize: 12,
+  },
+  largeModal: {
+    minHeight: "58%",
+  },
+  settlementContent: {
+    marginTop: 8,
+  },
+  settlementRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingVertical: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  settlementTotal: {
+    borderTopWidth: 2,
+    borderTopColor: colors.border,
+    marginTop: 4,
+    paddingTop: 10,
+  },
+  settlementLabel: {
+    color: colors.textSecondary,
+    fontFamily: fonts.body,
+    fontSize: 13,
+  },
+  settlementValue: {
+    color: colors.textPrimary,
+    fontFamily: fonts.heading,
+    fontSize: 13,
+  },
+  settlementDetails: {
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  settlementDetailTitle: {
+    color: colors.textSecondary,
+    fontFamily: fonts.heading,
+    fontSize: 12,
+    marginBottom: 4,
+  },
+  settlementDetailRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingVertical: 4,
+  },
+  settlementDetailLabel: {
+    color: colors.textMuted,
+    fontFamily: fonts.body,
+    fontSize: 12,
+  },
+  settlementDetailValue: {
+    color: colors.textPrimary,
+    fontFamily: fonts.heading,
+    fontSize: 12,
+  },
+  success: {
+    color: colors.success,
+  },
+  danger: {
+    color: colors.danger,
   },
 });

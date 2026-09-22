@@ -2,16 +2,14 @@ import React, { useMemo, useState } from "react";
 import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import DateTimePicker, { DateTimePickerEvent } from "@react-native-community/datetimepicker";
 import { AppTheme, useAppTheme, useThemedStyles } from "../theme";
+import { formatDate } from "../utils/date";
 
 type Props = {
   value: string;
   placeholder: string;
+  label?: string;
   onChange: (value: string) => void;
 };
-
-function toISODate(date: Date) {
-  return date.toISOString().slice(0, 10);
-}
 
 function parseInputDate(value: string) {
   if (!value) return new Date();
@@ -19,7 +17,26 @@ function parseInputDate(value: string) {
   return Number.isNaN(parsed.getTime()) ? new Date() : parsed;
 }
 
-export function DateField({ value, placeholder, onChange }: Props) {
+/**
+ * Convert a local date to UTC midnight of that same calendar date.
+ * This ensures the backend (which uses UTC) interprets the date as the
+ * calendar date the user selected, regardless of their timezone.
+ *
+ * Example: User in Asia/Kolkata (UTC+5:30) selects 2024-01-15
+ * Returns: 2024-01-15T00:00:00.000Z (UTC midnight of Jan 15)
+ */
+function toUtcMidnightOfLocalDate(date: Date): string {
+  // Get the local date components
+  const year = date.getFullYear();
+  const month = date.getMonth(); // 0-indexed
+  const day = date.getDate();
+
+  // Create a new Date at UTC midnight of those same calendar values
+  const utcDate = new Date(Date.UTC(year, month, day));
+  return utcDate.toISOString();
+}
+
+export function DateField({ value, placeholder, label, onChange }: Props) {
   const { colors, fonts, radii, shadows } = useAppTheme();
   const styles = useThemedStyles(createStyles);
   const [open, setOpen] = useState(false);
@@ -35,12 +52,14 @@ export function DateField({ value, placeholder, onChange }: Props) {
     if (Platform.OS === "ios") {
       setTempDate(selectedDate);
     } else {
-      onChange(toISODate(selectedDate));
+      // Send UTC midnight of the selected local date to backend
+      onChange(toUtcMidnightOfLocalDate(selectedDate));
     }
   };
 
   const handleConfirm = () => {
-    onChange(toISODate(tempDate));
+    // Send UTC midnight of the selected local date to backend
+    onChange(toUtcMidnightOfLocalDate(tempDate));
     setOpen(false);
   };
 
@@ -49,14 +68,17 @@ export function DateField({ value, placeholder, onChange }: Props) {
     setTempDate(pickerValue);
   };
 
+  const displayValue = value ? formatDate(value) : "";
+
   return (
     <View style={styles.container}>
       <Pressable style={styles.field} onPress={() => {
         setTempDate(pickerValue);
         setOpen(true);
       }}>
+        {label ? <Text style={styles.label}>{label}</Text> : null}
         <Text style={value ? styles.valueText : styles.placeholderText}>
-          {value || placeholder}
+          {displayValue || placeholder}
         </Text>
       </Pressable>
       {open ? (
@@ -93,9 +115,15 @@ const createStyles = ({ colors, fonts, radii, shadows }: AppTheme) => StyleSheet
     borderRadius: radii.button,
     backgroundColor: colors.surfaceAlt,
     paddingHorizontal: 12,
-    paddingVertical: 11,
-    minHeight: 44,
+    paddingVertical: 7,
+    minHeight: 56,
     justifyContent: "center",
+  },
+  label: {
+    color: colors.textMuted,
+    fontFamily: fonts.body,
+    fontSize: 11,
+    marginBottom: 2,
   },
   valueText: {
     color: colors.textPrimary,

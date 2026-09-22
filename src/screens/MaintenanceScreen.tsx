@@ -25,6 +25,7 @@ import { AppTheme, useAppTheme, useThemedStyles } from "../theme";
 import { MaintenanceRequest } from "../types/models";
 import { getUserFriendlyErrorMessage } from "../utils/errors";
 import { currentMonthKey, monthLabel, shiftMonth } from "../utils/month";
+import { formatDate } from "../utils/date";
 
 const money = (value: number) => `INR ${value.toLocaleString("en-IN")}`;
 
@@ -41,10 +42,6 @@ const nextStatus: Record<MaintenanceRequest["status"], MaintenanceRequest["statu
 };
 
 const priorities: MaintenanceRequest["priority"][] = ["low", "medium", "high"];
-
-function formatDate(value?: string) {
-  return value ? value.slice(0, 10) : "-";
-}
 
 function hasDisplayText(value?: string) {
   const trimmed = value?.trim();
@@ -91,8 +88,8 @@ export function MaintenanceScreen() {
 
   const invalidateMaintenance = async () => {
     await Promise.all([
-      queryClient.invalidateQueries({ queryKey: queryKeys.maintenance.requests }),
-      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.summary, refetchType: "all" })
+      queryClient.invalidateQueries({ queryKey: queryKeys.maintenance.requests, exact: true }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.summary, exact: true })
     ]);
   };
 
@@ -393,7 +390,7 @@ export function MaintenanceScreen() {
               <Text style={styles.fieldLabel}>
                 Maintenance date <Text style={styles.requiredMark}>*</Text>
               </Text>
-              <DateField value={servicedOn} onChange={setServicedOn} placeholder="Pick maintenance date" />
+              <DateField value={servicedOn} onChange={setServicedOn} placeholder="Pick maintenance date" label="Service date" />
               <Text style={styles.fieldLabel}>Notes (optional)</Text>
               <TextInput style={[styles.input, styles.textArea]} value={description} onChangeText={setDescription} placeholder="Notes / issue details (optional)" placeholderTextColor={colors.textMuted} multiline />
               <TextInput style={styles.input} value={serviceProvider} onChangeText={setServiceProvider} placeholder="Service provider (optional)" placeholderTextColor={colors.textMuted} />

@@ -1,4 +1,4 @@
-import { Tenant } from "../../types/models";
+import { Tenant, LedgerEntry, SettlementResult, LedgerEntryType } from "../../types/models";
 import { httpClient } from "./httpClient";
 import { toArray } from "./normalizers";
 
@@ -66,6 +66,28 @@ function normalizeTenant(input: unknown): Tenant {
     advanceAmount: Number(raw.advanceAmount ?? 0),
     openingDueAmount: Number(raw.openingDueAmount ?? 0),
     dueAmount: Number(raw.dueAmount ?? 0),
+    creditBalance: raw.creditBalance !== undefined && raw.creditBalance !== null
+      ? Number(raw.creditBalance)
+      : 0,
+    rentHistory: raw.rentHistory ? toArray<unknown>(raw.rentHistory).map(item => ({
+      effectiveFrom: String((item as Record<string, unknown>).effectiveFrom ?? ""),
+      monthlyRent: Number((item as Record<string, unknown>).monthlyRent ?? 0),
+    })) : undefined,
+    ledger: raw.ledger ? toArray<unknown>(raw.ledger).map(item => {
+      const ledgerRaw = item as Record<string, unknown>;
+      return {
+        id: String(ledgerRaw.id ?? ledgerRaw._id ?? ""),
+        tenantId: String(ledgerRaw.tenantId ?? ""),
+        propertyId: String(ledgerRaw.propertyId ?? ""),
+        transactionType: String(ledgerRaw.transactionType ?? "") as LedgerEntryType,
+        amount: Number(ledgerRaw.amount ?? 0),
+        effectiveDate: String(ledgerRaw.effectiveDate ?? ""),
+        dueMonth: ledgerRaw.dueMonth ? String(ledgerRaw.dueMonth) : undefined,
+        paymentId: ledgerRaw.paymentId ? String(ledgerRaw.paymentId) : undefined,
+        notes: ledgerRaw.notes ? String(ledgerRaw.notes) : undefined,
+        runningBalance: Number(ledgerRaw.runningBalance ?? 0),
+      };
+    }) : undefined,
     status: (raw.status as Tenant["status"]) ?? "active",
     kycVerified: Boolean(raw.kycVerified),
     leaseStart: raw.leaseStart ? String(raw.leaseStart) : undefined,
@@ -118,5 +140,55 @@ export async function removeTenant(tenantId: string, payload: RemoveTenantPayloa
     `/tenants/${tenantId}/remove`,
     payload
   );
+}
+
+export async function getTenantLedger(tenantId: string): Promise<LedgerEntry[]> {
+  const data = await httpClient.get<unknown>(`/tenants/${tenantId}/ledger`);
+  const ledgerRaw = toArray<unknown>(data, ["ledger", "items", "data"]);
+  return ledgerRaw.map(item => {
+    const raw = item as Record<string, unknown>;
+    return {
+      id: String(raw.id ?? raw._id ?? ""),
+      tenantId: String(raw.tenantId ?? ""),
+      propertyId: String(raw.propertyId ?? ""),
+      transactionType: String(raw.transactionType ?? "") as LedgerEntryType,
+      amount: Number(raw.amount ?? 0),
+      effectiveDate: String(raw.effectiveDate ?? ""),
+      dueMonth: raw.dueMonth ? String(raw.dueMonth) : undefined,
+      paymentId: raw.paymentId ? String(raw.paymentId) : undefined,
+      notes: raw.notes ? String(raw.notes) : undefined,
+      runningBalance: Number(raw.runningBalance ?? 0),
+    };
+  });
+}
+
+export async function getTenantOutstanding(tenantId: string): Promise<{ outstanding: number }> {
+  const data = await httpClient.get<{ outstanding: number }>(`/tenants/${tenantId}/outstanding`);
+  return data;
+}
+
+export async function getTenantCredit(tenantId: string): Promise<{ creditBalance: number }> {
+  const data = await httpClient.get<{ creditBalance: number }>(`/tenants/${tenantId}/credit`);
+  return data;
+}
+
+export async function calculateSettlement(tenantId: string, vacatedOn: string): Promise<SettlementResult> {
+  const data = await httpClient.post<unknown>(`/tenants/${tenantId}/settlement`, { vacatedOn });
+  const raw = data as Record<string, unknown>;
+  return {
+    tenantId: String(raw.tenantId ?? ""),
+    tenantName: String(raw.tenantName ?? ""),
+    vacatedOn: String(raw.vacatedOn ?? ""),
+    outstandingRent: Number(raw.outstandingRent ?? 0),
+    depositHeld: Number(raw.depositHeld ?? 0),
+    creditBalance: Number(raw.creditBalance ?? 0),
+    maintenanceCharges: Number(raw.maintenanceCharges ?? 0),
+    damageCharges: Number(raw.damageCharges ?? 0),
+    refundAmount: Number(raw.refundAmount ?? 0),
+    settlementDetails: (raw.settlementDetails as Array<Record<string, unknown>> ?? []).map(item => ({
+      description: String(item.description ?? ""),
+      amount: Number(item.amount ?? 0),
+    })),
+  };
 }
 

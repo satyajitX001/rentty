@@ -17,6 +17,20 @@ type PropertyType = (typeof propertyTypes)[number];
 const flatSizes = ["1BHK", "2BHK", "3BHK"] as const;
 type FlatSize = (typeof flatSizes)[number];
 
+const prorationModes = ["full_month", "pro_rata_daily", "next_cycle"] as const;
+type ProrationMode = (typeof prorationModes)[number];
+
+const prorationLabels: Record<ProrationMode, string> = {
+  full_month: "Full Month",
+  pro_rata_daily: "Pro-Rata (Daily)",
+  next_cycle: "Next Rent Cycle",
+};
+const prorationDescriptions: Record<ProrationMode, string> = {
+  full_month: "Charge full month rent regardless of join date",
+  pro_rata_daily: "Calculate daily rate × days remaining in month",
+  next_cycle: "Skip partial month, first charge on next due date",
+};
+
 function getErrorMessage(error: unknown) {
   if (error instanceof Error) return error.message;
   return "Unable to save property.";
@@ -30,6 +44,8 @@ export function PropertyFormScreen({ navigation, route }: Props) {
   const [name, setName] = useState(editItem?.name ?? "");
   const [address, setAddress] = useState(editItem?.address ?? "");
   const [type, setType] = useState<PropertyType>(editItem?.type ?? "hostels");
+  const [prorationMode, setProrationMode] = useState<ProrationMode>(editItem?.prorationMode ?? "pro_rata_daily");
+  const [graceDays, setGraceDays] = useState(editItem?.graceDays ?? 0);
 
   // Caretaker fields
   const [caretakerName, setCaretakerName] = useState(editItem?.caretaker ?? "");
@@ -48,6 +64,8 @@ export function PropertyFormScreen({ navigation, route }: Props) {
         name: name.trim(),
         address: address.trim(),
         type,
+        prorationMode,
+        graceDays,
         caretakerName: caretakerName.trim() || undefined,
         caretakerPhone: caretakerPhone.trim() || undefined,
         location: location.trim() || undefined,
@@ -210,6 +228,40 @@ export function PropertyFormScreen({ navigation, route }: Props) {
             />
           </InfoCard>
 
+          <InfoCard title="Proration Settings">
+            <Text style={styles.groupLabel}>First Month Rent Calculation</Text>
+            <View style={styles.typeRow}>
+              {prorationModes.map((mode) => (
+                <Pressable
+                  key={mode}
+                  style={[styles.typeChip, prorationMode === mode && styles.typeChipActive]}
+                  onPress={() => setProrationMode(mode)}
+                >
+                  <View style={styles.prorationChipContent}>
+                    <Text style={[styles.typeText, prorationMode === mode && styles.typeTextActive]}>
+                      {prorationLabels[mode]}
+                    </Text>
+                    <Text style={[styles.prorationDesc, prorationMode === mode && styles.typeTextActive]}>
+                      {prorationDescriptions[mode]}
+                    </Text>
+                  </View>
+                </Pressable>
+              ))}
+            </View>
+            <TextInput
+              style={styles.input}
+              placeholder="Grace Days (e.g., 5)"
+              placeholderTextColor={colors.textMuted}
+              value={String(graceDays)}
+              onChangeText={(val) => setGraceDays(parseInt(val, 10) || 0)}
+              keyboardType="numeric"
+            />
+            <Text style={styles.prorationNote}>
+              This determines how the first month's rent is calculated when a tenant joins mid-month.
+              Grace days extend the due date before late fees apply.
+            </Text>
+          </InfoCard>
+
           {saveMutation.isError ? (
             <Text style={styles.error}>{getErrorMessage(saveMutation.error)}</Text>
           ) : null}
@@ -286,6 +338,22 @@ const createStyles = ({ colors, fonts, radii, shadows }: AppTheme) => StyleSheet
   },
   typeTextActive: {
     color: colors.primaryDark,
+  },
+  prorationChipContent: {
+    flexDirection: "column",
+    gap: 2,
+  },
+  prorationDesc: {
+    color: colors.textMuted,
+    fontFamily: fonts.body,
+    fontSize: 10,
+  },
+  prorationNote: {
+    color: colors.textMuted,
+    fontFamily: fonts.body,
+    fontSize: 11,
+    marginTop: 8,
+    fontStyle: "italic",
   },
   actionRow: {
     flexDirection: "row",

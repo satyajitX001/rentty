@@ -1,12 +1,14 @@
 import React, { useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { InfoCard } from "../components/InfoCard";
 import { Screen } from "../components/Screen";
 import { DateField } from "../components/DateField";
 import { createTenant } from "../services/api/tenantService";
+import { getProperty } from "../services/api/propertyService";
 import { queryKeys } from "../services/api/queryKeys";
+import { calculateFirstMonthProration, getProrationLabel } from "../utils/proration";
 import { AppTheme, useAppTheme, useThemedStyles } from "../theme";
 import { AppStackParamList } from "../navigation/AppStackNavigator";
 
@@ -23,6 +25,13 @@ export function TenantFormScreen({ navigation, route }: Props) {
   const queryClient = useQueryClient();
   const { propertyId, propertyName, propertyAddress } = route.params;
 
+  // Fetch property to get prorationMode
+  const { data: property } = useQuery({
+    queryKey: queryKeys.properties.detail(propertyId),
+    queryFn: () => getProperty(propertyId),
+    enabled: !!propertyId,
+  });
+
   const [tenantName, setTenantName] = useState("");
   const [tenantAddress, setTenantAddress] = useState("");
   const [tenantPhone, setTenantPhone] = useState("");
@@ -32,13 +41,26 @@ export function TenantFormScreen({ navigation, route }: Props) {
   const [tenantAdvance, setTenantAdvance] = useState("");
   const [tenantOpeningDue, setTenantOpeningDue] = useState("");
 
+  // Calculate proration preview
+  const prorationPreview = useMemo(() => {
+    const rent = Number(tenantRent);
+    const rentDay = Number(tenantRentDay);
+    const joined = tenantJoinedOn.trim();
+    const mode = property?.prorationMode ?? "pro_rata_daily";
+
+    if (rent > 0 && rentDay >= 1 && rentDay <= 31 && joined.length > 0) {
+      return calculateFirstMonthProration(rent, joined, rentDay, mode);
+    }
+    return null;
+  }, [tenantRent, tenantRentDay, tenantJoinedOn, property?.prorationMode]);
+
   const createTenantMutation = useMutation({
     mutationFn: createTenant,
     onSuccess: async () => {
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: queryKeys.tenants.list }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.properties.list }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.summary, refetchType: "all" }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.tenants.list, exact: true }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.properties.list, exact: true }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.summary, exact: true }),
       ]);
       navigation.goBack();
     },
@@ -165,7 +187,23 @@ export function TenantFormScreen({ navigation, route }: Props) {
               value={tenantJoinedOn}
               onChange={setTenantJoinedOn}
               placeholder="Joined on"
+              label="Joined on"
             />
+
+            {prorationPreview && (
+              <View style={styles.prorationPreview}>
+                <Text style={styles.prorationPreviewLabel}>
+                  First Month Calculation ({getProrationLabel(property?.prorationMode ?? "pro_rata_daily")})
+                </Text>
+                <Text style={styles.prorationPreviewDescription}>{prorationPreview.description}</Text>
+                <View style={styles.prorationPreviewAmount}>
+                  <Text style={styles.prorationPreviewAmountLabel}>First Month Rent:</Text>
+                  <Text style={styles.prorationPreviewAmountValue}>
+                    ₹{prorationPreview.amount.toLocaleString("en-IN")}
+                  </Text>
+                </View>
+              </View>
+            )}
           </InfoCard>
 
           <InfoCard title="Financial Setup">
@@ -213,6 +251,47 @@ const createStyles = ({ colors, fonts, radii, shadows }: AppTheme) => StyleSheet
     color: colors.textPrimary,
     fontFamily: fonts.body,
     fontSize: 14,
+  },
+  prorationPreview: {
+    backgroundColor: colors.primarySoft,
+    borderRadius: radii.card,
+    padding: 12,
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: colors.primary,
+  },
+  prorationPreviewLabel: {
+    color: colors.primaryDark,
+    fontFamily: fonts.heading,
+    fontSize: 11,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  prorationPreviewDescription: {
+    color: colors.textSecondary,
+    fontFamily: fonts.body,
+    fontSize: 12,
+    marginTop: 4,
+  },
+  prorationPreviewAmount: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  prorationPreviewAmountLabel: {
+    color: colors.textSecondary,
+    fontFamily: fonts.heading,
+    fontSize: 13,
+  },
+  prorationPreviewAmountValue: {
+    color: colors.primaryDark,
+    fontFamily: fonts.heading,
+    fontSize: 16,
+    fontWeight: "700",
   },
   footer: {
     gap: 10,

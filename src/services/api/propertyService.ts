@@ -35,6 +35,12 @@ function normalizeProperty(input: unknown): Property {
   const raw = (input ?? {}) as Record<string, unknown>;
   const status = raw.occupancyStatus;
 
+  const prorationModeRaw = raw.prorationMode;
+  const validProrationModes = ["full_month", "pro_rata_daily", "next_cycle"] as const;
+  const prorationMode = validProrationModes.includes(prorationModeRaw as any)
+    ? (prorationModeRaw as "full_month" | "pro_rata_daily" | "next_cycle")
+    : "pro_rata_daily";
+
   return {
     id: String(raw.id ?? raw._id ?? ""),
     name: String(raw.name ?? ""),
@@ -45,7 +51,8 @@ function normalizeProperty(input: unknown): Property {
     occupancyStatus: status === "occupied" ? "occupied" : "available",
     totalBeds: raw.totalBeds !== undefined ? Number(raw.totalBeds) : undefined,
     occupiedBeds: raw.occupiedBeds !== undefined ? Number(raw.occupiedBeds) : undefined,
-    active: raw.active !== false
+    active: raw.active !== false,
+    prorationMode,
   };
 }
 
@@ -95,5 +102,10 @@ export async function updateProperty(propertyId: string, payload: UpdateProperty
     return normalizeProperty((data as Record<string, unknown>).property);
   }
 
+  return normalizeProperty(data);
+}
+
+export async function getProperty(propertyId: string) {
+  const data = await httpClient.get<unknown>(`/properties/${propertyId}`);
   return normalizeProperty(data);
 }

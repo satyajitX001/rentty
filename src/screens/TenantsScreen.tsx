@@ -6,7 +6,6 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
@@ -17,6 +16,7 @@ import { InfoCard } from "../components/InfoCard";
 import { Pill } from "../components/Pill";
 import { Screen } from "../components/Screen";
 import { DateField } from "../components/DateField";
+import { FloatingLabelInput } from "../components/FloatingLabelInput";
 import {
   collectRent,
   getPayments,
@@ -33,6 +33,7 @@ import { AppStackParamList } from "../navigation/AppStackNavigator";
 import { AppTheme, useAppTheme, useThemedStyles } from "../theme";
 import { scale, verticalScale, moderateScale } from "../utils/scale";
 import { Payment, Property, Tenant } from "../types/models";
+import { formatDate } from "../utils/date";
 
 const money = (value: number) => `INR ${value.toLocaleString("en-IN")}`;
 
@@ -45,10 +46,6 @@ function getErrorMessage(error: unknown) {
 
 function toDateInput(value?: string) {
   return value ? value.slice(0, 10) : "";
-}
-
-function inferDueMonth(dateInput: string) {
-  return dateInput.trim().length >= 7 ? dateInput.slice(0, 7) : "";
 }
 
 export function TenantsScreen() {
@@ -79,9 +76,7 @@ export function TenantsScreen() {
 
   const [paymentAmount, setPaymentAmount] = useState("");
   const [paymentDate, setPaymentDate] = useState("");
-  const [paymentDueMonth, setPaymentDueMonth] = useState("");
   const [paymentUtr, setPaymentUtr] = useState("");
-  const [paymentNotes, setPaymentNotes] = useState("");
   const [paymentMode, setPaymentMode] = useState<Payment["mode"]>("UPI");
 
   const [removeReason, setRemoveReason] = useState("");
@@ -95,10 +90,10 @@ export function TenantsScreen() {
 
   const invalidateOperationalQueries = async () => {
     await Promise.all([
-      queryClient.invalidateQueries({ queryKey: queryKeys.tenants.list, refetchType: "all" }),
-      queryClient.invalidateQueries({ queryKey: queryKeys.properties.list, refetchType: "all" }),
-      queryClient.invalidateQueries({ queryKey: queryKeys.collections.payments, refetchType: "all" }),
-      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.summary, refetchType: "all" }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.tenants.list, exact: true }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.properties.list, exact: true }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.collections.payments, exact: true }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.summary, exact: true }),
     ]);
   };
 
@@ -190,7 +185,6 @@ export function TenantsScreen() {
     Boolean(selectedTenant?.id) &&
     Number(paymentAmount) > 0 &&
     paymentDate.trim().length > 0 &&
-    paymentDueMonth.trim().length === 7 &&
     !collectPaymentMutation.isPending &&
     !updatePaymentMutation.isPending;
 
@@ -218,10 +212,8 @@ export function TenantsScreen() {
     setPaymentEditor(null);
     setPaymentAmount(String(Math.max(tenant.dueAmount, 0) || tenant.monthlyRent));
     setPaymentDate(now);
-    setPaymentDueMonth(inferDueMonth(now));
     setPaymentMode("UPI");
     setPaymentUtr("");
-    setPaymentNotes("");
     setIsDepositModalVisible(true);
   };
 
@@ -234,10 +226,8 @@ export function TenantsScreen() {
     setPaymentEditor(payment);
     setPaymentAmount(String(payment.amount));
     setPaymentDate(toDateInput(payment.paidOn));
-    setPaymentDueMonth(payment.dueMonth);
     setPaymentMode(payment.mode);
-    setPaymentUtr(payment.utr ?? "");
-    setPaymentNotes(payment.notes ?? "");
+    setPaymentUtr(payment.notes ?? payment.utr ?? "");
     setIsHistoryModalVisible(false);
     setIsDepositModalVisible(true);
   };
@@ -351,6 +341,14 @@ export function TenantsScreen() {
                               <Text style={[styles.tenantDue, tenant.dueAmount > 0 ? styles.danger : styles.success]}>
                                 Current Due: {money(tenant.dueAmount)}
                               </Text>
+                              {(tenant.creditBalance ?? 0) > 0 ? (
+                                <Text style={[styles.tenantAdvance, styles.credit]}>
+                                  Credit Balance: + {money(tenant.creditBalance ?? 0)}
+                                </Text>
+                              ) : null}
+                              <Text style={styles.tenantAdvance}>
+                                Advance Held: {money(tenant.advanceAmount ?? 0)}
+                              </Text>
                             </View>
                             <Pill
                               label={tenant.status.toUpperCase()}
@@ -388,18 +386,20 @@ export function TenantsScreen() {
                 <Text style={styles.modalCloseText}>X</Text>
               </Pressable>
             </View>
-            <TextInput style={styles.input} value={tenantName} onChangeText={setTenantName} placeholder="Tenant name" placeholderTextColor={colors.textMuted} />
-            <TextInput style={styles.input} value={tenantAddress} onChangeText={setTenantAddress} placeholder="Address" placeholderTextColor={colors.textMuted} />
-            <TextInput style={styles.input} value={tenantPhone} onChangeText={setTenantPhone} placeholder="Phone" placeholderTextColor={colors.textMuted} keyboardType="phone-pad" />
-            <TextInput style={styles.input} value={tenantRent} onChangeText={setTenantRent} placeholder="Monthly rent" placeholderTextColor={colors.textMuted} keyboardType="numeric" />
-            <TextInput style={styles.input} value={tenantRentDay} onChangeText={setTenantRentDay} placeholder="Due day" placeholderTextColor={colors.textMuted} keyboardType="numeric" />
+            <Text style={styles.modalMeta}>Update the agreement and financial details below.</Text>
+            <FloatingLabelInput label="Tenant name" value={tenantName} onChangeText={setTenantName} required />
+            <FloatingLabelInput label="Residential address" value={tenantAddress} onChangeText={setTenantAddress} multiline required />
+            <FloatingLabelInput label="Mobile number" value={tenantPhone} onChangeText={setTenantPhone} keyboardType="phone-pad" required />
+            <FloatingLabelInput label="Monthly rent" value={tenantRent} onChangeText={setTenantRent} keyboardType="numeric" required />
+            <FloatingLabelInput label="Rent due day" value={tenantRentDay} onChangeText={setTenantRentDay} keyboardType="numeric" hint="1–31" required />
             <DateField
               value={tenantJoinedOn}
               onChange={setTenantJoinedOn}
               placeholder="Joined on"
+              label="Joined on"
             />
-            <TextInput style={styles.input} value={tenantAdvance} onChangeText={setTenantAdvance} placeholder="Advance amount" placeholderTextColor={colors.textMuted} keyboardType="numeric" />
-            <TextInput style={styles.input} value={tenantOpeningDue} onChangeText={setTenantOpeningDue} placeholder="Opening due amount" placeholderTextColor={colors.textMuted} keyboardType="numeric" />
+            <FloatingLabelInput label="Advance amount" value={tenantAdvance} onChangeText={setTenantAdvance} keyboardType="numeric" />
+            <FloatingLabelInput label="Opening due amount" value={tenantOpeningDue} onChangeText={setTenantOpeningDue} keyboardType="numeric" />
             {updateTenantMutation.isError ? (
               <Text style={styles.error}>{getErrorMessage(updateTenantMutation.error)}</Text>
             ) : null}
@@ -453,18 +453,13 @@ export function TenantsScreen() {
               </Pressable>
             </View>
             <Text style={styles.modalMeta}>{selectedTenant?.fullName ?? ""}</Text>
-            <TextInput style={styles.input} value={paymentAmount} onChangeText={setPaymentAmount} placeholder="Amount" placeholderTextColor={colors.textMuted} keyboardType="numeric" />
+            <FloatingLabelInput label="Amount" value={paymentAmount} onChangeText={setPaymentAmount} keyboardType="numeric" required />
             <DateField
               value={paymentDate}
-              onChange={(value) => {
-                setPaymentDate(value);
-                if (!paymentEditor) {
-                  setPaymentDueMonth(inferDueMonth(value));
-                }
-              }}
+              onChange={setPaymentDate}
               placeholder="Paid on"
+              label="Paid on"
             />
-            <TextInput style={styles.input} value={paymentDueMonth} onChangeText={setPaymentDueMonth} placeholder="Due month YYYY-MM" placeholderTextColor={colors.textMuted} />
             <View style={styles.modeRow}>
               {paymentModes.map((mode) => (
                 <Pressable
@@ -478,19 +473,15 @@ export function TenantsScreen() {
                 </Pressable>
               ))}
             </View>
-            <TextInput style={styles.input} value={paymentUtr} onChangeText={setPaymentUtr} placeholder="UTR or reference" placeholderTextColor={colors.textMuted} />
-            <TextInput style={styles.input} value={paymentNotes} onChangeText={setPaymentNotes} placeholder="Notes" placeholderTextColor={colors.textMuted} />
+            <FloatingLabelInput label="Reference / notes" value={paymentUtr} onChangeText={setPaymentUtr} multiline hint="Add a UTR, reference, or any helpful note" />
             {collectPaymentMutation.isError || updatePaymentMutation.isError ? (
               <Text style={styles.error}>
                 {getErrorMessage(collectPaymentMutation.error ?? updatePaymentMutation.error)}
               </Text>
             ) : null}
             <View style={styles.modalActions}>
-              <Pressable style={styles.secondaryButton} onPress={() => setIsDepositModalVisible(false)}>
-                <Text style={styles.secondaryButtonText}>Cancel</Text>
-              </Pressable>
               <Pressable
-                style={[styles.primaryButton, !canSavePayment && styles.buttonDisabled]}
+                style={[styles.primaryButton, styles.fullWidthButton, !canSavePayment && styles.buttonDisabled]}
                 disabled={!canSavePayment}
                 onPress={() => {
                   if (!selectedTenant?.id) return;
@@ -500,10 +491,8 @@ export function TenantsScreen() {
                       payload: {
                         amount: Number(paymentAmount),
                         paidOn: paymentDate,
-                        dueMonth: paymentDueMonth,
                         mode: paymentMode,
-                        utr: paymentUtr.trim() || undefined,
-                        notes: paymentNotes.trim() || undefined,
+                        notes: paymentUtr.trim() || undefined,
                       },
                     });
                     return;
@@ -513,10 +502,8 @@ export function TenantsScreen() {
                     tenantId: selectedTenant.id,
                     amount: Number(paymentAmount),
                     paidOn: paymentDate,
-                    dueMonth: paymentDueMonth,
                     mode: paymentMode,
-                    utr: paymentUtr.trim() || undefined,
-                    notes: paymentNotes.trim() || undefined,
+                    notes: paymentUtr.trim() || undefined,
                   });
                 }}
               >
@@ -559,7 +546,7 @@ export function TenantsScreen() {
                   <View style={styles.flexOne}>
                     <Text style={styles.historyTitle}>{money(payment.amount)}</Text>
                     <Text style={styles.historyMeta}>
-                      {payment.paidOn.slice(0, 10)} | Due {payment.dueMonth} | {payment.mode}
+                      {formatDate(payment.paidOn)} | {payment.mode}
                     </Text>
                     <Text style={styles.historyMeta}>
                       {payment.receiptNo ?? payment.id}
@@ -598,11 +585,18 @@ export function TenantsScreen() {
             <Text style={styles.modalMeta}>
               This keeps history, payment records and property timeline intact.
             </Text>
-            <TextInput style={styles.input} value={removeReason} onChangeText={setRemoveReason} placeholder="Reason for vacating" placeholderTextColor={colors.textMuted} />
+            {(selectedTenant && (selectedTenant.creditBalance ?? 0) > 0) ? (
+              <View style={styles.refundInfo}>
+                <Text style={styles.refundLabel}>Credit Balance to Refund:</Text>
+                <Text style={styles.refundAmount}>+ {money(selectedTenant.creditBalance ?? 0)}</Text>
+              </View>
+            ) : null}
+            <FloatingLabelInput label="Reason for vacating" value={removeReason} onChangeText={setRemoveReason} required />
             <DateField
               value={vacatedOn}
               onChange={setVacatedOn}
               placeholder="Vacated on"
+              label="Vacated on"
             />
             {removeTenantMutation.isError ? (
               <Text style={styles.error}>{getErrorMessage(removeTenantMutation.error)}</Text>
@@ -691,6 +685,9 @@ const createStyles = ({ colors, fonts, radii, shadows }: AppTheme) => StyleSheet
     justifyContent: "center",
     paddingHorizontal: scale(12),
   },
+  fullWidthButton: {
+    width: "100%",
+  },
   primaryButtonText: {
     color: "#FFFFFF",
     fontFamily: fonts.heading,
@@ -743,6 +740,31 @@ const createStyles = ({ colors, fonts, radii, shadows }: AppTheme) => StyleSheet
   },
   success: {
     color: colors.success,
+  },
+  credit: {
+    color: colors.success,
+  },
+  refundInfo: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: verticalScale(8),
+    paddingHorizontal: scale(12),
+    backgroundColor: colors.success + "15",
+    borderRadius: moderateScale(radii.button),
+    borderWidth: 1,
+    borderColor: colors.success,
+    marginBottom: verticalScale(8),
+  },
+  refundLabel: {
+    color: colors.success,
+    fontFamily: fonts.heading,
+    fontSize: moderateScale(13),
+  },
+  refundAmount: {
+    color: colors.success,
+    fontFamily: fonts.display,
+    fontSize: moderateScale(16),
   },
   error: {
     color: colors.warning,
@@ -814,6 +836,9 @@ const createStyles = ({ colors, fonts, radii, shadows }: AppTheme) => StyleSheet
     color: colors.textPrimary,
     fontFamily: fonts.body,
     fontSize: moderateScale(14),
+  },
+  notesInput: {
+    minHeight: verticalScale(92),
   },
   modalActions: {
     flexDirection: "row",
@@ -936,6 +961,12 @@ const createStyles = ({ colors, fonts, radii, shadows }: AppTheme) => StyleSheet
   tenantDue: {
     fontFamily: fonts.body,
     fontSize: moderateScale(14),
+  },
+  tenantAdvance: {
+    color: colors.textSecondary,
+    fontFamily: fonts.body,
+    fontSize: moderateScale(12),
+    marginTop: verticalScale(2),
   },
   moreDetailsButton: {
     backgroundColor: colors.primarySoft,

@@ -6,7 +6,6 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
@@ -15,10 +14,12 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Screen } from "../components/Screen";
 import { Pill } from "../components/Pill";
 import { DateField } from "../components/DateField";
+import { FloatingLabelInput } from "../components/FloatingLabelInput";
 import { useAuth } from "../store/AuthContext";
 import { AppTheme, useAppTheme, useThemedStyles } from "../theme";
-import { Tenant, Property, Payment } from "../types/models";
+import { Tenant, Property, Payment, CollectPaymentResponse, LedgerEntryType } from "../types/models";
 import { AppStackParamList } from "../navigation/AppStackNavigator";
+import { formatDate } from "../utils/date";
 import {
   collectRent,
   getPayments,
@@ -28,6 +29,7 @@ import { queryKeys } from "../services/api/queryKeys";
 import {
   removeTenant,
   updateTenant,
+  calculateSettlement,
 } from "../services/api/tenantService";
 
 type Props = {
@@ -54,10 +56,6 @@ function toDateInput(value?: string) {
   return value ? value.slice(0, 10) : "";
 }
 
-function inferDueMonth(dateInput: string) {
-  return dateInput.trim().length >= 7 ? dateInput.slice(0, 7) : "";
-}
-
 export function TenantDetailsScreen({ route }: Props) {
   const { colors, fonts, radii, shadows } = useAppTheme();
   const styles = useThemedStyles(createStyles);
@@ -73,15 +71,16 @@ export function TenantDetailsScreen({ route }: Props) {
   const [isHistoryModalVisible, setIsHistoryModalVisible] = useState(false);
   const [isEditModalVisible, setIsEditModalVisible] = useState(false);
   const [isRemoveModalVisible, setIsRemoveModalVisible] = useState(false);
+  const [isSettlementModalVisible, setIsSettlementModalVisible] = useState(false);
+  const [settlementData, setSettlementData] = useState<import("../types/models").SettlementResult | null>(null);
 
   // Payment form state
   const [paymentAmount, setPaymentAmount] = useState("");
   const [paymentDate, setPaymentDate] = useState("");
-  const [paymentDueMonth, setPaymentDueMonth] = useState("");
   const [paymentUtr, setPaymentUtr] = useState("");
-  const [paymentNotes, setPaymentNotes] = useState("");
   const [paymentMode, setPaymentMode] = useState<PaymentMode>("UPI");
   const [paymentEditor, setPaymentEditor] = useState<Payment | null>(null);
+  const [useCreditAutomatically, setUseCreditAutomatically] = useState(true);
 
   // Edit tenant form state
   const [tenantName, setTenantName] = useState(tenant.fullName);
@@ -105,21 +104,27 @@ export function TenantDetailsScreen({ route }: Props) {
 
   const invalidateQueries = async () => {
     await Promise.all([
-      queryClient.invalidateQueries({ queryKey: queryKeys.tenants.list }),
-      queryClient.invalidateQueries({ queryKey: queryKeys.collections.payments }),
-      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.summary, refetchType: "all" }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.tenants.list, exact: true }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.collections.payments, exact: true }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.summary, exact: true }),
     ]);
   };
 
   const collectPaymentMutation = useMutation({
     mutationFn: collectRent,
-    onSuccess: async () => {
+    onSuccess: async (response: CollectPaymentResponse) => {
       setIsDepositModalVisible(false);
       setPaymentEditor(null);
       await invalidateQueries();
-      // Refresh tenant data
-      const updatedTenant = { ...tenant, dueAmount: Math.max(0, tenant.dueAmount - Number(paymentAmount)) };
-      setTenant(updatedTenant);
+      // Use backend's allocation response for accurate optimistic update
+      if (response.allocations && response.receipt) {
+        const updatedTenant = {
+          ...tenant,
+          dueAmount: response.receipt.balanceDue,
+          creditBalance: response.receipt.creditBalance,
+        };
+        setTenant(updatedTenant);
+      }
       resetPaymentForm();
     },
   });
@@ -155,14 +160,23 @@ export function TenantDetailsScreen({ route }: Props) {
     },
   });
 
+  const fetchSettlement = async () => {
+    try {
+      const result = await calculateSettlement(tenant.id, vacatedOn.trim() || new Date().toISOString().slice(0, 10));
+      setSettlementData(result);
+      setIsSettlementModalVisible(true);
+    } catch (error) {
+      // Error handled by modal
+    }
+  };
+
   const resetPaymentForm = () => {
     setPaymentAmount("");
     setPaymentDate("");
-    setPaymentDueMonth("");
     setPaymentUtr("");
-    setPaymentNotes("");
     setPaymentMode("UPI");
     setPaymentEditor(null);
+    setUseCreditAutomatically(true);
   };
 
   const openDepositModal = () => {
@@ -170,10 +184,9 @@ export function TenantDetailsScreen({ route }: Props) {
     setPaymentEditor(null);
     setPaymentAmount(String(Math.max(tenant.dueAmount, 0) || tenant.monthlyRent));
     setPaymentDate(now);
-    setPaymentDueMonth(inferDueMonth(now));
     setPaymentMode("UPI");
     setPaymentUtr("");
-    setPaymentNotes("");
+    setUseCreditAutomatically(true);
     setIsDepositModalVisible(true);
   };
 
@@ -203,10 +216,8 @@ export function TenantDetailsScreen({ route }: Props) {
     setPaymentEditor(payment);
     setPaymentAmount(String(payment.amount));
     setPaymentDate(toDateInput(payment.paidOn));
-    setPaymentDueMonth(payment.dueMonth);
     setPaymentMode(payment.mode ?? "UPI");
-    setPaymentUtr(payment.utr ?? "");
-    setPaymentNotes(payment.notes ?? "");
+    setPaymentUtr(payment.notes ?? payment.utr ?? "");
     setIsHistoryModalVisible(false);
     setIsDepositModalVisible(true);
   };
@@ -214,7 +225,6 @@ export function TenantDetailsScreen({ route }: Props) {
   const canSavePayment =
     Number(paymentAmount) > 0 &&
     paymentDate.trim().length > 0 &&
-    paymentDueMonth.trim().length === 7 &&
     !collectPaymentMutation.isPending &&
     !updatePaymentMutation.isPending;
 
@@ -243,6 +253,61 @@ export function TenantDetailsScreen({ route }: Props) {
           />
         </View>
 
+        {/* Financial Summary Card */}
+        <View style={styles.financialCard}>
+          <View style={styles.financialRow}>
+            <View style={styles.financialItem}>
+              <Text style={styles.financialLabel}>Monthly Rent</Text>
+              <Text style={styles.financialValue}>{money(tenant.monthlyRent)}</Text>
+            </View>
+            <View style={styles.financialItem}>
+              <Text style={styles.financialLabel}>Outstanding Due</Text>
+              <Text style={[styles.financialValue, tenant.dueAmount > 0 ? styles.danger : styles.success]}>
+                {money(tenant.dueAmount)}
+              </Text>
+            </View>
+          </View>
+          <View style={styles.financialRow}>
+            <View style={styles.financialItem}>
+              <Text style={styles.financialLabel}>Available Credit</Text>
+              <Text style={[styles.financialValue, styles.credit]}>{money(tenant.creditBalance ?? 0)}</Text>
+            </View>
+            <View style={styles.financialItem}>
+              <Text style={styles.financialLabel}>Deposit Held</Text>
+              <Text style={styles.financialValue}>{money(tenant.advanceAmount ?? 0)}</Text>
+            </View>
+          </View>
+          <View style={styles.financialRow}>
+            <View style={styles.financialItem}>
+              <Text style={styles.financialLabel}>Opening Balance</Text>
+              <Text style={styles.financialValue}>{money(tenant.openingDueAmount ?? 0)}</Text>
+            </View>
+            <View style={styles.financialItem}>
+              <Text style={styles.financialLabel}>Next Due Date</Text>
+              <Text style={styles.financialValue}>{tenant.joinedOn ? formatDate(tenant.joinedOn) : "-"}</Text>
+            </View>
+          </View>
+          {tenant.rentDueDay && property.graceDays ? (
+            <View style={styles.financialRow}>
+              <View style={styles.financialItem}>
+                <Text style={styles.financialLabel}>Grace Ends On</Text>
+                <Text style={styles.financialValue}>
+                  {(() => {
+                    const today = new Date();
+                    const year = today.getFullYear();
+                    const month = today.getMonth();
+                    const dueDay = Math.min(tenant.rentDueDay!, new Date(year, month + 1, 0).getDate());
+                    const dueDate = new Date(year, month, dueDay);
+                    const graceEnd = new Date(dueDate);
+                    graceEnd.setDate(graceEnd.getDate() + (property.graceDays ?? 0));
+                    return formatDate(graceEnd.toISOString());
+                  })()}
+                </Text>
+              </View>
+            </View>
+          ) : null}
+        </View>
+
         <View style={styles.card}>
           <View style={styles.row}>
             <Text style={styles.label}>Property</Text>
@@ -262,22 +327,11 @@ export function TenantDetailsScreen({ route }: Props) {
               {money(tenant.monthlyRent)} / {tenant.rentDueDay ?? 1}
             </Text>
           </View>
-          <View style={styles.row}>
-            <Text style={styles.label}>Current Due</Text>
-            <Text
-              style={[
-                styles.value,
-                tenant.dueAmount > 0 ? styles.danger : styles.success,
-              ]}
-            >
-              {money(tenant.dueAmount)}
-            </Text>
-          </View>
         </View>
 
         <View style={styles.actionRow}>
-          <Pressable style={styles.primaryButton} onPress={openDepositModal}>
-            <Text style={styles.primaryButtonText}>Deposit</Text>
+          <Pressable style={[styles.primaryButton, styles.dangerButton]} onPress={openRemoveModal}>
+            <Text style={styles.primaryButtonText}>Remove Tenant</Text>
           </Pressable>
           <Pressable style={styles.secondaryButton} onPress={openHistoryModal}>
             <Text style={styles.secondaryButtonText}>History</Text>
@@ -287,8 +341,8 @@ export function TenantDetailsScreen({ route }: Props) {
           </Pressable>
         </View>
 
-        <Pressable style={styles.removeButton} onPress={openRemoveModal}>
-          <Text style={styles.removeText}>Remove Tenant</Text>
+        <Pressable style={[styles.primaryButton, styles.fullWidthButton]} onPress={openDepositModal}>
+          <Text style={styles.primaryButtonText}>Record Collection</Text>
         </Pressable>
       </ScrollView>
 
@@ -303,9 +357,8 @@ export function TenantDetailsScreen({ route }: Props) {
               </Pressable>
             </View>
             <Text style={styles.modalMeta}>{tenant.fullName}</Text>
-            <TextInput style={styles.input} value={paymentAmount} onChangeText={setPaymentAmount} placeholder="Amount" placeholderTextColor={colors.textMuted} keyboardType="numeric" />
-            <DateField value={paymentDate} onChange={(v) => { setPaymentDate(v); setPaymentDueMonth(inferDueMonth(v)); }} placeholder="Paid on" />
-            <TextInput style={styles.input} value={paymentDueMonth} onChangeText={setPaymentDueMonth} placeholder="Due month (YYYY-MM)" placeholderTextColor={colors.textMuted} />
+            <FloatingLabelInput label="Amount" value={paymentAmount} onChangeText={setPaymentAmount} keyboardType="numeric" required />
+            <DateField value={paymentDate} onChange={setPaymentDate} placeholder="Paid on" label="Paid on" />
             <View style={styles.modeRow}>
               {paymentModes.map((mode) => (
                 <Pressable key={mode} style={[styles.modeChip, paymentMode === mode && styles.modeChipActive]} onPress={() => setPaymentMode(mode)}>
@@ -313,24 +366,34 @@ export function TenantDetailsScreen({ route }: Props) {
                 </Pressable>
               ))}
             </View>
-            <TextInput style={styles.input} value={paymentUtr} onChangeText={setPaymentUtr} placeholder="UTR / Reference (optional)" placeholderTextColor={colors.textMuted} />
-            <TextInput style={styles.input} value={paymentNotes} onChangeText={setPaymentNotes} placeholder="Notes (optional)" placeholderTextColor={colors.textMuted} />
+            <FloatingLabelInput label="Reference / notes" value={paymentUtr} onChangeText={setPaymentUtr} multiline hint="Add a UTR, reference, or any helpful note" />
             {(collectPaymentMutation.isError || updatePaymentMutation.isError) ? <Text style={styles.error}>{getErrorMessage(collectPaymentMutation.error ?? updatePaymentMutation.error)}</Text> : null}
+            {!paymentEditor && (tenant.creditBalance ?? 0) > 0 && tenant.dueAmount > 0 ? (
+              <View style={styles.creditOptionRow}>
+                <Pressable onPress={() => setUseCreditAutomatically(!useCreditAutomatically)} style={styles.creditCheckbox}>
+                  <Text style={[styles.creditCheckboxText, useCreditAutomatically && styles.creditCheckboxTextActive]}>✓</Text>
+                </Pressable>
+                <Text style={styles.creditOptionLabel}>Use Available Credit Automatically (Credit: {money(tenant.creditBalance ?? 0)})</Text>
+              </View>
+            ) : null}
             <View style={styles.modalActions}>
-              <Pressable style={styles.secondaryButton} onPress={() => setIsDepositModalVisible(false)}>
-                <Text style={styles.secondaryButtonText}>Cancel</Text>
-              </Pressable>
               <Pressable
-                style={[styles.primaryButton, !canSavePayment && styles.buttonDisabled]}
+                style={[styles.primaryButton, styles.fullWidthButton, !canSavePayment && styles.buttonDisabled]}
                 disabled={!canSavePayment}
                 onPress={() => {
                   if (paymentEditor) {
                     updatePaymentMutation.mutate({
                       paymentId: paymentEditor.id,
-                      payload: { amount: Number(paymentAmount), paidOn: paymentDate.trim(), dueMonth: paymentDueMonth.trim(), mode: paymentMode, utr: paymentUtr.trim() || undefined, notes: paymentNotes.trim() || undefined },
+                      payload: { amount: Number(paymentAmount), paidOn: paymentDate.trim(), mode: paymentMode, notes: paymentUtr.trim() || undefined },
                     });
                   } else {
-                    collectPaymentMutation.mutate({ tenantId: tenant.id, amount: Number(paymentAmount), paidOn: paymentDate.trim(), dueMonth: paymentDueMonth.trim(), mode: paymentMode, utr: paymentUtr.trim() || undefined, notes: paymentNotes.trim() || undefined });
+                    collectPaymentMutation.mutate({
+                      tenantId: tenant.id,
+                      amount: Number(paymentAmount),
+                      paidOn: paymentDate.trim(),
+                      mode: paymentMode,
+                      notes: paymentUtr.trim() || undefined
+                    });
                   }
                 }}
               >
@@ -358,9 +421,9 @@ export function TenantDetailsScreen({ route }: Props) {
               {(paymentsQuery.data ?? []).map((payment) => (
                 <View key={payment.id} style={styles.historyRow}>
                   <View style={styles.flexOne}>
-                    <Text style={styles.historyMonth}>{payment.dueMonth}</Text>
-                    <Text style={styles.historyDate}>Paid on {payment.paidOn.slice(0, 10)} • {payment.mode.replace("_", " ")}</Text>
-                    {payment.utr ? <Text style={styles.historyRef}>Ref: {payment.utr}</Text> : null}
+                    <Text style={styles.historyMonth}>{money(payment.amount)}</Text>
+                    <Text style={styles.historyDate}>Paid on {formatDate(payment.paidOn)} • {payment.mode.replace("_", " ")}</Text>
+                    {payment.utr || payment.notes ? <Text style={styles.historyRef}>{payment.notes ?? payment.utr}</Text> : null}
                   </View>
                   <View style={styles.historyRight}>
                     <Text style={styles.historyAmount}>{money(payment.amount)}</Text>
@@ -385,14 +448,15 @@ export function TenantDetailsScreen({ route }: Props) {
                 <Text style={styles.modalCloseText}>X</Text>
               </Pressable>
             </View>
-            <TextInput style={styles.input} value={tenantName} onChangeText={setTenantName} placeholder="Tenant name" placeholderTextColor={colors.textMuted} />
-            <TextInput style={styles.input} value={tenantAddress} onChangeText={setTenantAddress} placeholder="Address" placeholderTextColor={colors.textMuted} />
-            <TextInput style={styles.input} value={tenantPhone} onChangeText={setTenantPhone} placeholder="Phone" placeholderTextColor={colors.textMuted} keyboardType="phone-pad" />
-            <TextInput style={styles.input} value={tenantRent} onChangeText={setTenantRent} placeholder="Monthly rent" placeholderTextColor={colors.textMuted} keyboardType="numeric" />
-            <TextInput style={styles.input} value={tenantRentDay} onChangeText={setTenantRentDay} placeholder="Due day" placeholderTextColor={colors.textMuted} keyboardType="numeric" />
-            <DateField value={tenantJoinedOn} onChange={setTenantJoinedOn} placeholder="Joined on" />
-            <TextInput style={styles.input} value={tenantAdvance} onChangeText={setTenantAdvance} placeholder="Advance amount" placeholderTextColor={colors.textMuted} keyboardType="numeric" />
-            <TextInput style={styles.input} value={tenantOpeningDue} onChangeText={setTenantOpeningDue} placeholder="Opening due amount" placeholderTextColor={colors.textMuted} keyboardType="numeric" />
+            <Text style={styles.modalMeta}>Update contact, rent, and deposit details. Changes are saved to this tenant only.</Text>
+            <FloatingLabelInput label="Tenant name" value={tenantName} onChangeText={setTenantName} required />
+            <FloatingLabelInput label="Residential address" value={tenantAddress} onChangeText={setTenantAddress} multiline required />
+            <FloatingLabelInput label="Mobile number" value={tenantPhone} onChangeText={setTenantPhone} keyboardType="phone-pad" required />
+            <FloatingLabelInput label="Monthly rent" value={tenantRent} onChangeText={setTenantRent} keyboardType="numeric" required />
+            <FloatingLabelInput label="Rent due day" value={tenantRentDay} onChangeText={setTenantRentDay} keyboardType="numeric" hint="1–31" required />
+            <DateField value={tenantJoinedOn} onChange={setTenantJoinedOn} placeholder="Joined on" label="Joined on" />
+            <FloatingLabelInput label="Advance amount" value={tenantAdvance} onChangeText={setTenantAdvance} keyboardType="numeric" />
+            <FloatingLabelInput label="Opening due amount" value={tenantOpeningDue} onChangeText={setTenantOpeningDue} keyboardType="numeric" />
             {updateTenantMutation.isError ? <Text style={styles.error}>{getErrorMessage(updateTenantMutation.error)}</Text> : null}
             <View style={styles.modalActions}>
               <Pressable style={styles.secondaryButton} onPress={() => setIsEditModalVisible(false)}>
@@ -435,8 +499,17 @@ export function TenantDetailsScreen({ route }: Props) {
               </Pressable>
             </View>
             <Text style={styles.modalMeta}>{tenant.fullName}</Text>
-            <TextInput style={styles.input} value={removeReason} onChangeText={setRemoveReason} placeholder="Reason for removal" placeholderTextColor={colors.textMuted} />
-            <DateField value={vacatedOn} onChange={setVacatedOn} placeholder="Vacated on" />
+            {(tenant.creditBalance ?? 0) > 0 ? (
+              <View style={styles.refundInfo}>
+                <Text style={styles.refundLabel}>Credit Balance to Refund:</Text>
+                <Text style={styles.refundAmount}>+ {money(tenant.creditBalance ?? 0)}</Text>
+              </View>
+            ) : null}
+            <Pressable style={styles.settlementPreviewButton} onPress={fetchSettlement}>
+              <Text style={styles.settlementPreviewText}>Preview Settlement</Text>
+            </Pressable>
+            <FloatingLabelInput label="Reason for removal" value={removeReason} onChangeText={setRemoveReason} required />
+            <DateField value={vacatedOn} onChange={setVacatedOn} placeholder="Vacated on" label="Vacated on" />
             {removeTenantMutation.isError ? <Text style={styles.error}>{getErrorMessage(removeTenantMutation.error)}</Text> : null}
             <View style={styles.modalActions}>
               <Pressable style={styles.secondaryButton} onPress={() => setIsRemoveModalVisible(false)}>
@@ -448,6 +521,71 @@ export function TenantDetailsScreen({ route }: Props) {
                 onPress={() => { removeTenantMutation.mutate({ tenantId: tenant.id, reason: removeReason.trim(), vacatedOnDate: vacatedOn.trim() || undefined }); }}
               >
                 <Text style={styles.dangerButtonText}>{removeTenantMutation.isPending ? "Removing..." : "Remove Tenant"}</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Settlement Preview Modal */}
+      <Modal visible={isSettlementModalVisible} transparent animationType="slide" onRequestClose={() => setIsSettlementModalVisible(false)}>
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.modalCard, styles.largeModal]}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Settlement Preview</Text>
+              <Pressable style={styles.modalCloseButton} onPress={() => setIsSettlementModalVisible(false)}>
+                <Text style={styles.modalCloseText}>X</Text>
+              </Pressable>
+            </View>
+            <Text style={styles.modalMeta}>{tenant.fullName}</Text>
+            {settlementData ? (
+              <View style={styles.settlementContent}>
+                <View style={styles.settlementRow}>
+                  <Text style={styles.settlementLabel}>Outstanding Rent</Text>
+                  <Text style={styles.settlementValue}>{money(settlementData.outstandingRent)}</Text>
+                </View>
+                <View style={styles.settlementRow}>
+                  <Text style={styles.settlementLabel}>Deposit Held</Text>
+                  <Text style={styles.settlementValue}>{money(settlementData.depositHeld)}</Text>
+                </View>
+                <View style={styles.settlementRow}>
+                  <Text style={styles.settlementLabel}>Credit Balance</Text>
+                  <Text style={[styles.settlementValue, styles.credit]}>+ {money(settlementData.creditBalance)}</Text>
+                </View>
+                <View style={styles.settlementRow}>
+                  <Text style={styles.settlementLabel}>Maintenance Charges</Text>
+                  <Text style={styles.settlementValue}>{money(settlementData.maintenanceCharges)}</Text>
+                </View>
+                <View style={styles.settlementRow}>
+                  <Text style={styles.settlementLabel}>Damage Charges</Text>
+                  <Text style={styles.settlementValue}>{money(settlementData.damageCharges)}</Text>
+                </View>
+                <View style={[styles.settlementRow, styles.settlementTotal]}>
+                  <Text style={styles.settlementLabel}>Refund Amount</Text>
+                  <Text style={[styles.settlementValue, settlementData.refundAmount >= 0 ? styles.success : styles.danger]}>
+                    {money(settlementData.refundAmount)}
+                  </Text>
+                </View>
+                {settlementData.settlementDetails && settlementData.settlementDetails.length > 0 ? (
+                  <View style={styles.settlementDetails}>
+                    <Text style={styles.settlementDetailTitle}>Breakdown:</Text>
+                    {settlementData.settlementDetails.map((detail, idx) => (
+                      <View key={idx} style={styles.settlementDetailRow}>
+                        <Text style={styles.settlementDetailLabel}>{detail.description}</Text>
+                        <Text style={[styles.settlementDetailValue, detail.amount >= 0 ? styles.success : styles.danger]}>
+                          {money(detail.amount)}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                ) : null}
+              </View>
+            ) : (
+              <ActivityIndicator color={colors.primary} />
+            )}
+            <View style={styles.modalActions}>
+              <Pressable style={styles.secondaryButton} onPress={() => setIsSettlementModalVisible(false)}>
+                <Text style={styles.secondaryButtonText}>Close</Text>
               </Pressable>
             </View>
           </View>
@@ -480,6 +618,35 @@ const createStyles = ({ colors, fonts, radii, shadows }: AppTheme) => StyleSheet
     marginHorizontal: 12,
     marginBottom: 16,
   },
+  financialCard: {
+    backgroundColor: colors.surface,
+    borderRadius: radii.card,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 16,
+    marginHorizontal: 12,
+    marginBottom: 16,
+  },
+  financialRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 12,
+  },
+  financialItem: {
+    flex: 1,
+    marginRight: 8,
+  },
+  financialLabel: {
+    fontFamily: fonts.body,
+    fontSize: 12,
+    color: colors.textMuted,
+    marginBottom: 2,
+  },
+  financialValue: {
+    fontFamily: fonts.heading,
+    fontSize: 16,
+    color: colors.textPrimary,
+  },
   row: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -507,9 +674,33 @@ const createStyles = ({ colors, fonts, radii, shadows }: AppTheme) => StyleSheet
   success: {
     color: colors.success,
   },
+  credit: {
+    color: colors.success,
+  },
+  refundInfo: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: colors.success + "15",
+    borderRadius: radii.button,
+    borderWidth: 1,
+    borderColor: colors.success,
+    marginBottom: 8,
+  },
+  refundLabel: {
+    color: colors.success,
+    fontFamily: fonts.heading,
+    fontSize: 13,
+  },
+  refundAmount: {
+    color: colors.success,
+    fontFamily: fonts.display,
+    fontSize: 16,
+  },
   actionRow: {
     flexDirection: "row",
-    gap: 12,
     marginHorizontal: 12,
     marginBottom: 16,
   },
@@ -519,6 +710,9 @@ const createStyles = ({ colors, fonts, radii, shadows }: AppTheme) => StyleSheet
     borderRadius: radii.button,
     paddingVertical: 14,
     alignItems: "center",
+  },
+  fullWidthButton: {
+    width: "100%",
   },
   primaryButtonText: {
     color: "#FFFFFF",
@@ -575,7 +769,6 @@ const createStyles = ({ colors, fonts, radii, shadows }: AppTheme) => StyleSheet
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    gap: 10,
   },
   modalTitle: {
     color: colors.textPrimary,
@@ -614,9 +807,11 @@ const createStyles = ({ colors, fonts, radii, shadows }: AppTheme) => StyleSheet
     fontFamily: fonts.body,
     fontSize: 14,
   },
+  notesInput: {
+    minHeight: 92,
+  },
   modalActions: {
     flexDirection: "row",
-    gap: 8,
     marginTop: 8,
   },
   buttonDisabled: {
@@ -625,7 +820,9 @@ const createStyles = ({ colors, fonts, radii, shadows }: AppTheme) => StyleSheet
   modeRow: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 8,
+    marginTop: -4,
+    marginLeft: -4,
+    marginRight: -4,
   },
   modeChip: {
     borderRadius: 999,
@@ -649,6 +846,107 @@ const createStyles = ({ colors, fonts, radii, shadows }: AppTheme) => StyleSheet
   },
   error: {
     color: colors.danger,
+    fontFamily: fonts.heading,
+    fontSize: 12,
+  },
+  creditOptionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: colors.success + "15",
+    borderRadius: radii.button,
+    borderWidth: 1,
+    borderColor: colors.success,
+    marginBottom: 8,
+  },
+  creditCheckbox: {
+    width: 24,
+    height: 24,
+    borderRadius: 4,
+    borderWidth: 2,
+    borderColor: colors.success,
+    backgroundColor: colors.surface,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  creditCheckboxText: {
+    color: "transparent",
+    fontFamily: fonts.heading,
+    fontSize: 14,
+  },
+  creditCheckboxTextActive: {
+    color: colors.success,
+  },
+  creditOptionLabel: {
+    color: colors.success,
+    fontFamily: fonts.body,
+    fontSize: 12,
+    flex: 1,
+  },
+  settlementPreviewButton: {
+    alignSelf: "flex-start",
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: colors.primarySoft,
+    borderRadius: radii.button,
+    marginBottom: 8,
+  },
+  settlementPreviewText: {
+    color: colors.primaryDark,
+    fontFamily: fonts.heading,
+    fontSize: 12,
+  },
+  settlementContent: {
+    marginTop: 8,
+  },
+  settlementRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingVertical: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  settlementTotal: {
+    borderTopWidth: 2,
+    borderTopColor: colors.border,
+    marginTop: 4,
+    paddingTop: 10,
+  },
+  settlementLabel: {
+    color: colors.textSecondary,
+    fontFamily: fonts.body,
+    fontSize: 13,
+  },
+  settlementValue: {
+    color: colors.textPrimary,
+    fontFamily: fonts.heading,
+    fontSize: 13,
+  },
+  settlementDetails: {
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  settlementDetailTitle: {
+    color: colors.textSecondary,
+    fontFamily: fonts.heading,
+    fontSize: 12,
+    marginBottom: 4,
+  },
+  settlementDetailRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingVertical: 4,
+  },
+  settlementDetailLabel: {
+    color: colors.textMuted,
+    fontFamily: fonts.body,
+    fontSize: 12,
+  },
+  settlementDetailValue: {
+    color: colors.textPrimary,
     fontFamily: fonts.heading,
     fontSize: 12,
   },

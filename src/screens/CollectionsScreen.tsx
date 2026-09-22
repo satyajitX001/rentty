@@ -9,8 +9,17 @@ import { queryKeys } from "../services/api/queryKeys";
 import { getTenants } from "../services/api/tenantService";
 import { AppTheme, useAppTheme, useThemedStyles } from "../theme";
 import { buildMonthOptions, currentMonthKey, monthLabel, shiftMonth } from "../utils/month";
+import { formatDate } from "../utils/date";
 
 const money = (value: number) => `INR ${value.toLocaleString("en-IN")}`;
+
+const allocationOptions = [
+  { value: "oldest", label: "Oldest Due (FIFO)" },
+  { value: "current", label: "Current Month" },
+  { value: "future", label: "Future Month" },
+] as const;
+
+type AllocationMode = (typeof allocationOptions)[number]["value"];
 
 export function CollectionsScreen() {
   const { colors, fonts, radii, shadows } = useAppTheme();
@@ -88,8 +97,11 @@ export function CollectionsScreen() {
             <View style={styles.flexOne}>
               <Text style={styles.bold}>{tenant.fullName}</Text>
               <Text style={styles.meta}>
-                Due day {tenant.rentDueDay} | Joined {tenant.joinedOn?.slice(0, 10)}
+                Due day {tenant.rentDueDay} | Joined {formatDate(tenant.joinedOn)}
               </Text>
+              {(tenant.creditBalance ?? 0) > 0 ? (
+                <Text style={styles.creditMeta}>Credit: + {money(tenant.creditBalance ?? 0)}</Text>
+              ) : null}
             </View>
             <Pill label={money(tenant.dueAmount)} tone="warning" />
           </View>
@@ -103,8 +115,17 @@ export function CollectionsScreen() {
             <View style={styles.flexOne}>
               <Text style={styles.bold}>{money(payment.amount)}</Text>
               <Text style={styles.meta}>
-                Paid {payment.paidOn.slice(0, 10)} | Due {payment.dueMonth} | {payment.mode}
+                Paid {formatDate(payment.paidOn)} | {payment.mode}
               </Text>
+              {payment.allocations && payment.allocations.length > 0 ? (
+                <View style={styles.allocationsContainer}>
+                  {payment.allocations.map((alloc, idx) => (
+                    <Text key={idx} style={styles.allocationText}>
+                      {alloc.month}: {money(alloc.amountApplied)} ({alloc.type})
+                    </Text>
+                  ))}
+                </View>
+              ) : null}
               <Text style={styles.meta}>{payment.receiptNo ?? payment.id}</Text>
             </View>
             <Pill label="Captured" tone="success" />
@@ -148,13 +169,11 @@ export function CollectionsScreen() {
 const createStyles = ({ colors, fonts, radii, shadows }: AppTheme) => StyleSheet.create({
   metricRow: {
     flexDirection: "row",
-    gap: 10,
     marginTop: 10,
   },
   monthPicker: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
   },
   monthButton: {
     borderRadius: 999,
@@ -172,7 +191,6 @@ const createStyles = ({ colors, fonts, radii, shadows }: AppTheme) => StyleSheet
   monthCenter: {
     flex: 1,
     alignItems: "center",
-    gap: 2,
   },
   monthTitle: {
     color: colors.textPrimary,
@@ -200,7 +218,6 @@ const createStyles = ({ colors, fonts, radii, shadows }: AppTheme) => StyleSheet
     borderRadius: 16,
     backgroundColor: colors.surfaceAlt,
     padding: 12,
-    gap: 4,
   },
   metricValue: {
     color: colors.textPrimary,
@@ -216,7 +233,6 @@ const createStyles = ({ colors, fonts, radii, shadows }: AppTheme) => StyleSheet
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    gap: 10,
     paddingVertical: 4,
   },
   flexOne: {
@@ -225,6 +241,11 @@ const createStyles = ({ colors, fonts, radii, shadows }: AppTheme) => StyleSheet
   meta: {
     color: colors.textMuted,
     fontSize: 12,
+    fontFamily: fonts.body,
+  },
+  creditMeta: {
+    color: colors.success,
+    fontSize: 11,
     fontFamily: fonts.body,
   },
   bold: {
@@ -242,7 +263,6 @@ const createStyles = ({ colors, fonts, radii, shadows }: AppTheme) => StyleSheet
     borderTopLeftRadius: radii.card,
     borderTopRightRadius: radii.card,
     padding: 16,
-    gap: 12,
     borderWidth: 1,
     borderColor: colors.border,
     maxHeight: "82%",
@@ -251,7 +271,6 @@ const createStyles = ({ colors, fonts, radii, shadows }: AppTheme) => StyleSheet
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    gap: 10,
   },
   modalTitle: {
     color: colors.textPrimary,
@@ -277,7 +296,9 @@ const createStyles = ({ colors, fonts, radii, shadows }: AppTheme) => StyleSheet
   monthOptionGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 8,
+    marginLeft: -4,
+    marginRight: -4,
+    marginTop: -4,
   },
   monthOption: {
     width: "48%",
@@ -287,6 +308,7 @@ const createStyles = ({ colors, fonts, radii, shadows }: AppTheme) => StyleSheet
     backgroundColor: colors.surfaceAlt,
     paddingVertical: 10,
     paddingHorizontal: 10,
+    margin: 4,
   },
   monthOptionActive: {
     backgroundColor: colors.primary,
@@ -300,5 +322,13 @@ const createStyles = ({ colors, fonts, radii, shadows }: AppTheme) => StyleSheet
   },
   monthOptionTextActive: {
     color: "#FFFFFF",
+  },
+  allocationsContainer: {
+    marginTop: 4,
+  },
+  allocationText: {
+    color: colors.textSecondary,
+    fontFamily: fonts.body,
+    fontSize: 11,
   },
 });

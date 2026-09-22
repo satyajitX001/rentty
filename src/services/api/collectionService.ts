@@ -1,4 +1,4 @@
-import { Payment } from "../../types/models";
+import { Payment, CollectPaymentResponse, PaymentAllocation, LedgerEntryType } from "../../types/models";
 import { httpClient } from "./httpClient";
 import { toArray } from "./normalizers";
 
@@ -7,21 +7,11 @@ export type CollectRentInput = {
   amount: number;
   mode: Payment["mode"];
   paidOn: string;
-  dueMonth?: string;
   utr?: string;
   notes?: string;
 };
 
-export type CollectRentResponse = {
-  payment: Payment;
-  receipt: {
-    receiptNo: string;
-    tenantName?: string;
-    amount?: number;
-    paidOn?: string;
-    balanceDue: number;
-  };
-};
+export type CollectRentResponse = CollectPaymentResponse;
 
 const normalizePayment = (input: unknown): Payment => {
   const raw = (input ?? {}) as Record<string, unknown>;
@@ -51,7 +41,6 @@ export type UpdatePaymentInput = {
   amount?: number;
   mode?: Payment["mode"];
   paidOn?: string;
-  dueMonth?: string;
   utr?: string;
   notes?: string;
 };

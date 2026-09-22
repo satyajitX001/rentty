@@ -38,6 +38,11 @@ function normalizeDashboardSummary(input: unknown): DashboardSummary {
     pendingDues: readNumber(source, ["pendingDues", "pending_dues"]) ?? 0,
     monthCollection:
       readNumber(source, ["monthCollection", "month_collection", "totalCollection", "total_collection"]) ?? 0,
+    rentEarned: readNumber(source, ["rentEarned", "rent_earned"]) ?? 0,
+    totalCredit: readNumber(source, ["totalCredit", "total_credit"]) ?? 0,
+    totalDepositsHeld: readNumber(source, ["totalDepositsHeld", "total_deposits_held"]) ?? 0,
+    prepaidRent: readNumber(source, ["prepaidRent", "prepaid_rent"]) ?? 0,
+    outstandingVacatedDues: readNumber(source, ["outstandingVacatedDues", "outstanding_vacated_dues"]) ?? 0,
     openMaintenance: readNumber(source, ["openMaintenance", "open_maintenance"]) ?? 0,
     monthExpenses: readNumber(source, ["monthExpenses", "month_expenses"]) ?? 0,
     occupiedBeds: readNumber(source, ["occupiedBeds", "occupied_beds"]),
