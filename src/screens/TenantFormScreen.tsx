@@ -38,7 +38,7 @@ export function TenantFormScreen({ navigation, route }: Props) {
   const [tenantRent, setTenantRent] = useState("");
   const [tenantRentDay, setTenantRentDay] = useState("");
   const [tenantJoinedOn, setTenantJoinedOn] = useState("");
-  const [tenantAdvance, setTenantAdvance] = useState("");
+  const [tenantSecurityDeposit, setTenantSecurityDeposit] = useState("");
   const [tenantOpeningDue, setTenantOpeningDue] = useState("");
 
   // Calculate proration preview
@@ -89,7 +89,7 @@ export function TenantFormScreen({ navigation, route }: Props) {
       monthlyRent: Number(tenantRent),
       rentDueDay: Number(tenantRentDay),
       joinedOn: tenantJoinedOn.trim(),
-      advanceAmount: Number(tenantAdvance || 0),
+      securityDeposit: Number(tenantSecurityDeposit || 0),
       openingDueAmount: Number(tenantOpeningDue || 0),
     });
   };
@@ -209,11 +209,11 @@ export function TenantFormScreen({ navigation, route }: Props) {
           <InfoCard title="Financial Setup">
             <TextInput
               style={styles.input}
-              placeholder="Advance amount (optional)"
+              placeholder="Security deposit (optional)"
               placeholderTextColor={colors.textMuted}
               keyboardType="numeric"
-              value={tenantAdvance}
-              onChangeText={setTenantAdvance}
+              value={tenantSecurityDeposit}
+              onChangeText={setTenantSecurityDeposit}
             />
             <TextInput
               style={styles.input}

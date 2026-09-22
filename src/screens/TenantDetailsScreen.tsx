@@ -89,7 +89,7 @@ export function TenantDetailsScreen({ route }: Props) {
   const [tenantRent, setTenantRent] = useState(String(tenant.monthlyRent));
   const [tenantRentDay, setTenantRentDay] = useState(String(tenant.rentDueDay ?? 1));
   const [tenantJoinedOn, setTenantJoinedOn] = useState(toDateInput(tenant.joinedOn));
-  const [tenantAdvance, setTenantAdvance] = useState(String(tenant.advanceAmount ?? 0));
+  const [tenantSecurityDeposit, setTenantSecurityDeposit] = useState(String(tenant.securityDeposit ?? tenant.advanceAmount ?? 0));
   const [tenantOpeningDue, setTenantOpeningDue] = useState(String(tenant.openingDueAmount ?? 0));
 
   // Remove tenant form state
@@ -201,7 +201,7 @@ export function TenantDetailsScreen({ route }: Props) {
     setTenantRent(String(tenant.monthlyRent));
     setTenantRentDay(String(tenant.rentDueDay ?? 1));
     setTenantJoinedOn(toDateInput(tenant.joinedOn));
-    setTenantAdvance(String(tenant.advanceAmount ?? 0));
+    setTenantSecurityDeposit(String(tenant.securityDeposit ?? tenant.advanceAmount ?? 0));
     setTenantOpeningDue(String(tenant.openingDueAmount ?? 0));
     setIsEditModalVisible(true);
   };
@@ -475,7 +475,7 @@ export function TenantDetailsScreen({ route }: Props) {
                       monthlyRent: Number(tenantRent),
                       rentDueDay: Number(tenantRentDay),
                       joinedOn: tenantJoinedOn.trim(),
-                      advanceAmount: Number(tenantAdvance || 0),
+                      securityDeposit: Number(tenantSecurityDeposit || 0),
                       openingDueAmount: Number(tenantOpeningDue || 0),
                     },
                   });

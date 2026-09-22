@@ -55,6 +55,7 @@ export type Tenant = {
   monthlyRent: number;
   rentDueDay?: number;
   joinedOn?: string;
+  securityDeposit?: number;
   advanceAmount?: number;
   openingDueAmount?: number;
   dueAmount: number;

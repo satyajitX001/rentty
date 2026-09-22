@@ -83,7 +83,7 @@ Legend: **A** = requires `Authorization: Bearer <accessToken>` · **Role** = ser
 | PATCH | `/properties/:id/caretaker` | ✓ | OWNER/ADMIN | caretaker?≥2, caretakerPhone 8–20 | `{property,onboarding}` | ✓ |
 | DELETE | `/properties/:id` | ✓ | OWNER/ADMIN | — | `{property}` | ✗ |
 | GET | `/tenants` | ✓ | scoped | propertyId?, status?, includeInactive? | `{tenants[]}` | ✓ |
-| POST | `/tenants` | ✓ | (property access) | fullName≥2, fullAddress≥5, phone 8–20, propertyId≥1, monthlyRent≥0, rentDueDay 1–31 int, joinedOn date, +optional | `{tenant}` (400 if occupied / joinedOn future) | ✓ |
+| POST | `/tenants` | ✓ | (property access) | fullName≥2, fullAddress≥5, phone 8–20, propertyId≥1, monthlyRent≥0, rentDueDay 1–31 int, joinedOn date, securityDeposit?/legacy advanceAmount?, +optional | `{tenant}` (400 if occupied / joinedOn future) | ✓ |
 | GET | `/tenants/:id` | ✓ | scoped | — | `{tenant}` | ✗ |
 | PUT | `/tenants/:id` | ✓ | scoped | partial update | `{tenant}` | ✓ |
 | PATCH | `/tenants/:id/lease` | ✓ | scoped | leaseEnd?, monthlyRent?, remarks? | `{tenant}` | ✗ |
@@ -127,10 +127,11 @@ server-side on every read and is never client-controlled.
    floored at 0 and rounded. It is **recomputed on every** tenant list / get / update / remove **and**
    on every dashboard summary. → Editing a past payment correctly updates `dueAmount` on the next
    fetch. (The earlier "dues drift" concern is resolved by the backend.)
-2. **One active tenant per property is enforced server-side.** `POST /tenants` returns `400
+2. **Security deposit is separate from rent dues.** New clients send `securityDeposit`; the backend still accepts legacy `advanceAmount` and dual-writes both fields for old clients/data. Security deposit must never reduce current due, pending rent, dashboard balances, collection receipt `balanceDue`, reports, reminders, or exports.
+3. **One active tenant per property is enforced server-side.** `POST /tenants` returns `400
    "Property is currently occupied. Remove existing tenant first."` if an active tenant exists.
    `remove` sets `active=false`, `status=vacated`, and flips the property to `available`.
-3. **RBAC scoping.** Owners see only properties they created (`createdBy`) and their tenants;
+4. **RBAC scoping.** Owners see only properties they created (`createdBy`) and their tenants;
    caretakers see only properties they're linked to. **Caretakers cannot create/update/delete/assign
    properties** → `403`. Admin sees all.
 4. **Refresh returns only a new access token** (no rotation); the client keeps the same refresh token
@@ -213,7 +214,7 @@ Each: **Precondition → Steps → Expected (backend-verified) → Pass/Fail**.
 - **Validation (client):** name≥2, address≥5, phone≥8, rent≥0, rentDay 1–31, joinedOn required.
 - **Server:** same minimums; `joinedOn` **cannot be in the future** → `400`; property **occupied** →
   `400`; phone normalized to **+91 prefix** by the mobile before send (M8 resolved — matches auth formatting).
-- **Expected:** `POST /tenants` → tenant created, property flips to `occupied`, dueAmount computed.
+- **Expected:** `POST /tenants` → tenant created, property flips to `occupied`, dueAmount computed from rent/opening due/payments only. Entering a security deposit must not reduce `dueAmount`.
 
 ### F8 — Tenant edit
 - Same validation as F7. `PUT /tenants/:id`. Due recomputed.
@@ -348,7 +349,8 @@ Paste this so the agent tests the **real, wired** behavior:
 - **Rate limit:** 10 auth calls / IP / 15 min → `429`. Space out auth tests or restart backend.
 - **Password reset code is always `1234`** (dev). No SMS.
 - **Business rules enforced server-side:** one active tenant per property (400 if occupied); dues
-  recomputed from joinedOn/rentDueDay/monthlyRent/payments (no drift); owner-scoped data; caretakers
+  recomputed from joinedOn/rentDueDay/monthlyRent/openingDue/payments (no drift); security deposit
+  is separate from rent dues; owner-scoped data; caretakers
   cannot manage properties (403).
 - **Validation minimums:** tenant name≥2/address≥5/phone≥8/rentDay 1–31; **maintenance title≥3**
   (mobile now aligned to ≥3 — F13); collection amount>0; dueMonth `YYYY-MM`.

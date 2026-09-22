@@ -103,7 +103,7 @@ export function DashboardScreen() {
   const [tenantRent, setTenantRent] = useState("");
   const [tenantRentDay, setTenantRentDay] = useState("");
   const [tenantJoinedOn, setTenantJoinedOn] = useState("");
-  const [tenantAdvance, setTenantAdvance] = useState("");
+  const [tenantSecurityDeposit, setTenantSecurityDeposit] = useState("");
   const [tenantOpeningDue, setTenantOpeningDue] = useState("");
 
   const [caretakerName, setCaretakerName] = useState("");
@@ -132,7 +132,7 @@ export function DashboardScreen() {
       setTenantRent("");
       setTenantRentDay("");
       setTenantJoinedOn("");
-      setTenantAdvance("");
+      setTenantSecurityDeposit("");
       setTenantOpeningDue("");
       setIsTenantModalVisible(false);
       setIsPropertyDetailVisible(false);
@@ -513,7 +513,7 @@ export function DashboardScreen() {
                     monthlyRent: Number(tenantRent),
                     rentDueDay: Number(tenantRentDay),
                     joinedOn: tenantJoinedOn.trim(),
-                    advanceAmount: Number(tenantAdvance || 0),
+                    securityDeposit: Number(tenantSecurityDeposit || 0),
                     openingDueAmount: Number(tenantOpeningDue || 0),
                   });
                 }}

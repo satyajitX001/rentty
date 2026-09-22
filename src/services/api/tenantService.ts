@@ -23,6 +23,7 @@ export type CreateTenantPayload = {
   monthlyRent: number;
   rentDueDay: number;
   joinedOn: string;
+  securityDeposit?: number;
   advanceAmount?: number;
   openingDueAmount?: number;
 };
@@ -49,6 +50,7 @@ export type TenantFilters = {
 function normalizeTenant(input: unknown): Tenant {
   const raw = (input ?? {}) as Record<string, unknown>;
   const propertyIdValue = raw.propertyId;
+  const securityDeposit = Number(raw.securityDeposit ?? raw.advanceAmount ?? 0);
 
   return {
     id: String(raw.id ?? raw._id ?? ""),
@@ -63,7 +65,8 @@ function normalizeTenant(input: unknown): Tenant {
     monthlyRent: Number(raw.monthlyRent ?? 0),
     rentDueDay: Number(raw.rentDueDay ?? 1),
     joinedOn: String(raw.joinedOn ?? raw.leaseStart ?? ""),
-    advanceAmount: Number(raw.advanceAmount ?? 0),
+    securityDeposit,
+    advanceAmount: securityDeposit,
     openingDueAmount: Number(raw.openingDueAmount ?? 0),
     dueAmount: Number(raw.dueAmount ?? 0),
     creditBalance: raw.creditBalance !== undefined && raw.creditBalance !== null
@@ -110,8 +113,11 @@ export async function getTenants(filters: TenantFilters = {}) {
 }
 
 export async function createTenant(payload: CreateTenantPayload) {
+  const securityDeposit = payload.securityDeposit ?? payload.advanceAmount ?? 0;
   const data = await httpClient.post<unknown>("/tenants", {
     ...payload,
+    securityDeposit,
+    advanceAmount: securityDeposit,
     phone: normalizePhoneToE164(payload.phone),
   });
 
@@ -123,8 +129,12 @@ export async function createTenant(payload: CreateTenantPayload) {
 }
 
 export async function updateTenant(tenantId: string, payload: UpdateTenantPayload) {
+  const hasSecurityDeposit =
+    payload.securityDeposit !== undefined || payload.advanceAmount !== undefined;
+  const securityDeposit = payload.securityDeposit ?? payload.advanceAmount ?? 0;
   const data = await httpClient.put<unknown>(`/tenants/${tenantId}`, {
     ...payload,
+    ...(hasSecurityDeposit ? { securityDeposit, advanceAmount: securityDeposit } : {}),
     ...(payload.phone !== undefined ? { phone: normalizePhoneToE164(payload.phone) } : {}),
   });
 

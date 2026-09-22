@@ -71,7 +71,7 @@ export function TenantsScreen() {
   const [tenantRent, setTenantRent] = useState("");
   const [tenantRentDay, setTenantRentDay] = useState("");
   const [tenantJoinedOn, setTenantJoinedOn] = useState("");
-  const [tenantAdvance, setTenantAdvance] = useState("");
+  const [tenantSecurityDeposit, setTenantSecurityDeposit] = useState("");
   const [tenantOpeningDue, setTenantOpeningDue] = useState("");
 
   const [paymentAmount, setPaymentAmount] = useState("");
@@ -201,7 +201,7 @@ export function TenantsScreen() {
     setTenantRent(String(tenant.monthlyRent));
     setTenantRentDay(String(tenant.rentDueDay ?? 1));
     setTenantJoinedOn(toDateInput(tenant.joinedOn));
-    setTenantAdvance(String(tenant.advanceAmount ?? 0));
+    setTenantSecurityDeposit(String(tenant.securityDeposit ?? tenant.advanceAmount ?? 0));
     setTenantOpeningDue(String(tenant.openingDueAmount ?? 0));
     setIsEditModalVisible(true);
   };
@@ -421,7 +421,7 @@ export function TenantsScreen() {
                       monthlyRent: Number(tenantRent),
                       rentDueDay: Number(tenantRentDay),
                       joinedOn: tenantJoinedOn.trim(),
-                      advanceAmount: Number(tenantAdvance || 0),
+                      securityDeposit: Number(tenantSecurityDeposit || 0),
                       openingDueAmount: Number(tenantOpeningDue || 0),
                     },
                   });
