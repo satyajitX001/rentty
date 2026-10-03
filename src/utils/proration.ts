@@ -15,13 +15,13 @@ export interface ProrationResult {
 
 const prorationLabels: Record<ProrationMode, string> = {
   full_month: "Full Month",
-  pro_rata_daily: "Pro-Rata (Daily)",
+  pro_rata_daily: "Daily Calculation",
   next_cycle: "Next Rent Cycle",
 };
 
 const prorationDescriptions: Record<ProrationMode, string> = {
   full_month: "Charge full month rent regardless of join date",
-  pro_rata_daily: "Calculate daily rate × days remaining in month",
+  pro_rata_daily: "Calculate daily rate × days based on due date",
   next_cycle: "Skip partial month, first charge on next due date",
 };
 
@@ -33,102 +33,86 @@ function getDaysInMonth(year: number, month: number): number {
 /**
  * Calculate first month prorated rent
  * @param monthlyRent - Monthly rent amount
- * @param joinedOn - Join date in YYYY-MM-DD format
- * @param rentDueDay - Day of month rent is due (1-31)
+ * @param joinedOn - Join date in YYYY-MM-DD or ISO format (YYYY-MM-DDTHH:mm:ss.sssZ)
+ * @param rentDueDay - Day of month rent is due (1-31), optional
  * @param prorationMode - Proration mode from property settings
  * @returns ProrationResult with amount and description
  */
 export function calculateFirstMonthProration(
   monthlyRent: number,
   joinedOn: string,
-  rentDueDay: number,
+  rentDueDay?: number,
   prorationMode: ProrationMode = "pro_rata_daily"
 ): ProrationResult {
   if (monthlyRent <= 0) {
     return { amount: 0, daysCharged: 0, description: "No rent configured" };
   }
 
-  const joinDate = new Date(joinedOn + "T00:00:00");
+  // Handle both YYYY-MM-DD and ISO format (YYYY-MM-DDTHH:mm:ss.sssZ)
+  const joinDate = new Date(joinedOn.includes("T") ? joinedOn : joinedOn + "T00:00:00");
   if (isNaN(joinDate.getTime())) {
     return { amount: 0, daysCharged: 0, description: "Invalid join date" };
   }
 
   const joinYear = joinDate.getFullYear();
-  const joinMonth = joinDate.getMonth() + 1; // 1-indexed
+  const joinMonth = joinDate.getMonth(); // 0-indexed
   const joinDay = joinDate.getDate();
 
-  // Calculate the first due date
-  const firstDueDate = new Date(joinYear, joinMonth - 1, rentDueDay);
+  // If no rentDueDay provided, default: charge from join date to end of month
+  if (!rentDueDay || rentDueDay < 1 || rentDueDay > 31) {
+    const daysInJoinMonth = getDaysInMonth(joinYear, joinMonth + 1);
+    const daysCharged = daysInJoinMonth - joinDay + 1; // inclusive of join day
+    const dailyRate = monthlyRent / daysInJoinMonth;
+    const amount = Math.round(dailyRate * daysCharged);
 
-  // If join date is after the due day in the same month, first due is next month
-  if (joinDay > rentDueDay) {
-    firstDueDate.setMonth(firstDueDate.getMonth() + 1);
+    return {
+      amount,
+      daysCharged,
+      description: `No due day set. ₹${monthlyRent.toLocaleString("en-IN")} / ${daysInJoinMonth} days × ${daysCharged} days (join to month end) = ₹${amount.toLocaleString("en-IN")}`,
+    };
   }
 
-  const dueYear = firstDueDate.getFullYear();
-  const dueMonth = firstDueDate.getMonth() + 1;
+  // Calculate the first due date in the join month
+  const firstDueDateInJoinMonth = new Date(joinYear, joinMonth, rentDueDay);
 
-  switch (prorationMode) {
-    case "full_month":
-      return {
-        amount: monthlyRent,
-        daysCharged: getDaysInMonth(dueYear, dueMonth),
-        description: `${prorationLabels.full_month}: Full month rent of ₹${monthlyRent.toLocaleString("en-IN")}`,
-      };
+  // Case 1: due date >= joining date (same month)
+  // e.g., due=10, joining=Aug 8 → charge from Aug 8 to Aug 10
+  if (rentDueDay >= joinDay) {
+    const daysCharged = rentDueDay - joinDay + 1; // inclusive of both join day and due day
+    const daysInJoinMonth = getDaysInMonth(joinYear, joinMonth + 1);
+    const dailyRate = monthlyRent / daysInJoinMonth;
+    const amount = Math.round(dailyRate * daysCharged);
 
-    case "next_cycle":
-      // Check if join date is exactly on the due day
-      if (joinDay === rentDueDay) {
-        return {
-          amount: monthlyRent,
-          daysCharged: getDaysInMonth(dueYear, dueMonth),
-          description: `${prorationLabels.next_cycle}: Joined on due day, full month rent ₹${monthlyRent.toLocaleString("en-IN")}`,
-        };
-      }
-      return {
-        amount: 0,
-        daysCharged: 0,
-        description: `${prorationLabels.next_cycle}: No charge for partial month, first rent due on ${formatDateForDisplay(firstDueDate)}`,
-      };
-
-    case "pro_rata_daily":
-    default: {
-      // Calculate days from join date to end of the month containing the first due date
-      // The charge period is from join date to the day before the NEXT due date
-      // But typically proration is from join date to end of the month
-
-      const daysInJoinMonth = getDaysInMonth(joinYear, joinMonth);
-
-      // If first due is in the same month as join
-      if (dueMonth === joinMonth && dueYear === joinYear) {
-        // Days from join day to due day (exclusive of due day, or inclusive?)
-        // Standard: charge from join date to day before next due date
-        // For first month: from join date to end of month
-        const daysCharged = daysInJoinMonth - joinDay + 1; // inclusive of join day
-        const dailyRate = monthlyRent / daysInJoinMonth;
-        const amount = Math.round(dailyRate * daysCharged);
-
-        return {
-          amount,
-          daysCharged,
-          description: `${prorationLabels.pro_rata_daily}: ₹${monthlyRent.toLocaleString("en-IN")} / ${daysInJoinMonth} days × ${daysCharged} days = ₹${amount.toLocaleString("en-IN")}`,
-        };
-      } else {
-        // First due is next month - charge for partial month of join month + full next month?
-        // Standard interpretation: only charge for days in join month (partial)
-        // The full next month will be charged on the due date
-        const daysCharged = daysInJoinMonth - joinDay + 1;
-        const dailyRate = monthlyRent / daysInJoinMonth;
-        const amount = Math.round(dailyRate * daysCharged);
-
-        return {
-          amount,
-          daysCharged,
-          description: `${prorationLabels.pro_rata_daily}: ₹${monthlyRent.toLocaleString("en-IN")} / ${daysInJoinMonth} days × ${daysCharged} days (join month) = ₹${amount.toLocaleString("en-IN")}`,
-        };
-      }
-    }
+    return {
+      amount,
+      daysCharged,
+      description: `Due day (${rentDueDay}) ≥ Join day (${joinDay}). ₹${monthlyRent.toLocaleString("en-IN")} / ${daysInJoinMonth} days × ${daysCharged} days (${joinDay}–${rentDueDay}) = ₹${amount.toLocaleString("en-IN")}`,
+    };
   }
+
+  // Case 2: due date < joining date (next month)
+  // e.g., due=8, joining=Aug 10 → charge from Aug 10 to Sep 8
+  const nextMonth = joinMonth + 1;
+  const nextMonthYear = nextMonth > 11 ? joinYear + 1 : joinYear;
+  const nextMonthIndex = nextMonth > 11 ? 0 : nextMonth;
+  const daysInNextMonth = getDaysInMonth(nextMonthYear, nextMonthIndex + 1);
+
+  // Days from join date to end of join month
+  const daysInJoinMonth = getDaysInMonth(joinYear, joinMonth + 1);
+  const daysRemainingInJoinMonth = daysInJoinMonth - joinDay + 1;
+
+  // Days from start of next month to due day (inclusive)
+  const daysInNextMonthToDue = rentDueDay;
+
+  const totalDaysCharged = daysRemainingInJoinMonth + daysInNextMonthToDue;
+  const dailyRate = monthlyRent / daysInJoinMonth; // Use join month days for daily rate
+  const amount = Math.round(dailyRate * totalDaysCharged);
+
+  return {
+    amount,
+    daysCharged: totalDaysCharged,
+    description: `Due day (${rentDueDay}) < Join day (${joinDay}). ₹${monthlyRent.toLocaleString("en-IN")} / ${daysInJoinMonth} days × ${totalDaysCharged} days (${joinDay}–month end + 1–${rentDueDay} next month) = ₹${amount.toLocaleString("en-IN")}`,
+  };
 }
 
 /**

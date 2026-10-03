@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from "react";
-import { ActivityIndicator, Alert, Modal, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { BottomSheetModalWrapper } from "../components/BottomSheetModal";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Ionicons } from "@expo/vector-icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -217,72 +218,78 @@ export function PropertyActionsScreen({ navigation, route }: Props) {
         </InfoCard>
       </View>
 
-      <Modal visible={isRemoveModalVisible} transparent animationType="slide" onRequestClose={() => setIsRemoveModalVisible(false)}>
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Remove Tenant</Text>
-              <Pressable style={styles.modalCloseButton} onPress={() => setIsRemoveModalVisible(false)}>
-                <Text style={styles.modalCloseText}>X</Text>
-              </Pressable>
-            </View>
-            <Text style={styles.modalMeta}>
-              This will not delete tenant history or payments. The tenant will be marked vacated and this property becomes available.
-            </Text>
-            <Text style={styles.modalTenantName}>{currentTenant?.fullName}</Text>
-            {currentTenant && (currentTenant.creditBalance ?? 0) > 0 ? (
-              <View style={styles.refundInfo}>
-                <Text style={styles.refundLabel}>Credit Balance to Refund:</Text>
-                <Text style={styles.refundAmount}>+ {money(currentTenant.creditBalance ?? 0)}</Text>
-              </View>
-            ) : null}
-            <Pressable style={styles.settlementPreviewButton} onPress={fetchSettlement}>
-              <Text style={styles.settlementPreviewText}>Preview Settlement</Text>
+      <BottomSheetModalWrapper
+        visible={isRemoveModalVisible}
+        onRequestClose={() => setIsRemoveModalVisible(false)}
+        snapPoints={["95%", "60%"]}
+      >
+        <View style={styles.modalCard}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Remove Tenant</Text>
+            <Pressable style={styles.modalCloseButton} onPress={() => setIsRemoveModalVisible(false)}>
+              <Text style={styles.modalCloseText}>X</Text>
             </Pressable>
-            <TextInput
-              style={[styles.input, styles.textArea]}
-              value={removeReason}
-              onChangeText={setRemoveReason}
-              placeholder="Reason, e.g. lease ended, shifted out"
-              placeholderTextColor={colors.textMuted}
-              multiline
-            />
-            <DateField value={vacatedOn} onChange={setVacatedOn} placeholder="Vacated on" label="Vacated on" />
-            <View style={styles.modalActions}>
-              <Pressable style={styles.secondaryButton} onPress={() => setIsRemoveModalVisible(false)}>
-                <Text style={styles.secondaryButtonText}>Cancel</Text>
-              </Pressable>
-              <Pressable
-                style={[styles.primaryDangerButton, !canRemoveTenant && styles.disabledButton]}
-                disabled={!canRemoveTenant || removeTenantMutation.isPending}
-                onPress={() => {
-                  if (!currentTenant?.id) return;
-                  removeTenantMutation.mutate({ tenantId: currentTenant.id, reason: removeReason.trim(), vacatedOnDate: vacatedOn.trim() || undefined });
-                }}
-              >
-                {removeTenantMutation.isPending ? (
-                  <ActivityIndicator color="#FFFFFF" size="small" />
-                ) : (
-                  <Text style={styles.primaryButtonText}>Confirm Remove</Text>
-                )}
-              </Pressable>
+          </View>
+          <Text style={styles.modalMeta}>
+            This will not delete tenant history or payments. The tenant will be marked vacated and this property becomes available.
+          </Text>
+          <Text style={styles.modalTenantName}>{currentTenant?.fullName}</Text>
+          {currentTenant && (currentTenant.creditBalance ?? 0) > 0 ? (
+            <View style={styles.refundInfo}>
+              <Text style={styles.refundLabel}>Credit Balance to Refund:</Text>
+              <Text style={styles.refundAmount}>+ {money(currentTenant.creditBalance ?? 0)}</Text>
             </View>
+          ) : null}
+          <Pressable style={styles.settlementPreviewButton} onPress={fetchSettlement}>
+            <Text style={styles.settlementPreviewText}>Preview Settlement</Text>
+          </Pressable>
+          <TextInput
+            style={[styles.input, styles.textArea]}
+            value={removeReason}
+            onChangeText={setRemoveReason}
+            placeholder="Reason, e.g. lease ended, shifted out"
+            placeholderTextColor={colors.textMuted}
+            multiline
+          />
+          <DateField value={vacatedOn} onChange={setVacatedOn} placeholder="Vacated on" label="Vacated on" />
+          <View style={styles.modalActions}>
+            <Pressable style={styles.secondaryButton} onPress={() => setIsRemoveModalVisible(false)}>
+              <Text style={styles.secondaryButtonText}>Cancel</Text>
+            </Pressable>
+            <Pressable
+              style={[styles.primaryDangerButton, !canRemoveTenant && styles.disabledButton]}
+              disabled={!canRemoveTenant || removeTenantMutation.isPending}
+              onPress={() => {
+                if (!currentTenant?.id) return;
+                removeTenantMutation.mutate({ tenantId: currentTenant.id, reason: removeReason.trim(), vacatedOnDate: vacatedOn.trim() || undefined });
+              }}
+            >
+              {removeTenantMutation.isPending ? (
+                <ActivityIndicator color="#FFFFFF" size="small" />
+              ) : (
+                <Text style={styles.primaryButtonText}>Confirm Remove</Text>
+              )}
+            </Pressable>
           </View>
         </View>
-      </Modal>
+      </BottomSheetModalWrapper>
 
       {/* Settlement Preview Modal */}
-      <Modal visible={isSettlementModalVisible} transparent animationType="slide" onRequestClose={() => setIsSettlementModalVisible(false)}>
-        <View style={styles.modalBackdrop}>
-          <View style={[styles.modalCard, styles.largeModal]}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Settlement Preview</Text>
-              <Pressable style={styles.modalCloseButton} onPress={() => setIsSettlementModalVisible(false)}>
-                <Text style={styles.modalCloseText}>X</Text>
-              </Pressable>
-            </View>
-            <Text style={styles.modalMeta}>{currentTenant?.fullName}</Text>
-            {settlementData ? (
+      <BottomSheetModalWrapper
+        visible={isSettlementModalVisible}
+        onRequestClose={() => setIsSettlementModalVisible(false)}
+        snapPoints={["95%", "70%"]}
+      >
+        <View style={[styles.modalCard, styles.largeModal]}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Settlement Preview</Text>
+            <Pressable style={styles.modalCloseButton} onPress={() => setIsSettlementModalVisible(false)}>
+              <Text style={styles.modalCloseText}>X</Text>
+            </Pressable>
+          </View>
+          <Text style={styles.modalMeta}>{currentTenant?.fullName}</Text>
+          {settlementData ? (
+            <>
               <View style={styles.settlementContent}>
                 <View style={styles.settlementRow}>
                   <Text style={styles.settlementLabel}>Outstanding Rent</Text>
@@ -324,17 +331,17 @@ export function PropertyActionsScreen({ navigation, route }: Props) {
                   </View>
                 ) : null}
               </View>
-            ) : (
-              <ActivityIndicator color={colors.primary} />
-            )}
-            <View style={styles.modalActions}>
-              <Pressable style={styles.secondaryButton} onPress={() => setIsSettlementModalVisible(false)}>
-                <Text style={styles.secondaryButtonText}>Close</Text>
-              </Pressable>
-            </View>
+            </>
+          ) : (
+            <ActivityIndicator color={colors.primary} />
+          )}
+          <View style={styles.modalActions}>
+            <Pressable style={styles.secondaryButton} onPress={() => setIsSettlementModalVisible(false)}>
+              <Text style={styles.secondaryButtonText}>Close</Text>
+            </Pressable>
           </View>
         </View>
-      </Modal>
+      </BottomSheetModalWrapper>
     </Screen>
   );
 }

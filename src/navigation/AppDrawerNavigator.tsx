@@ -1,5 +1,6 @@
 import React, { useState } from "react";
-import { ActivityIndicator, Alert, Modal, Pressable, Switch, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Alert, Pressable, Switch, StyleSheet, Text, TextInput, View } from "react-native";
+import { BottomSheetModalWrapper } from "../components/BottomSheetModal";
 import {
   DrawerContentComponentProps,
   DrawerContentScrollView,
@@ -147,75 +148,79 @@ function CustomDrawerContent(props: DrawerContentComponentProps) {
         labelStyle={styles.logoutText}
       />
 
-      <Modal visible={isProfileVisible} transparent animationType="slide" onRequestClose={() => setIsProfileVisible(false)}>
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Edit Profile</Text>
-              <Pressable style={styles.modalCloseButton} onPress={() => setIsProfileVisible(false)}>
-                <Text style={styles.modalCloseText}>X</Text>
-              </Pressable>
-            </View>
-            <Text style={styles.modalMeta}>Keep owner/caretaker contact details updated for property operations.</Text>
-            <TextInput style={styles.input} value={name} onChangeText={setName} placeholder="Full name" placeholderTextColor={colors.textMuted} />
-            <TextInput style={styles.input} value={phone} onChangeText={setPhone} placeholder="Mobile number" placeholderTextColor={colors.textMuted} keyboardType="phone-pad" />
-            <View style={styles.modalActions}>
-              <Pressable style={styles.secondaryButton} onPress={() => setIsProfileVisible(false)}>
-                <Text style={styles.secondaryButtonText}>Cancel</Text>
-              </Pressable>
-              <Pressable
-                style={[styles.primaryButton, !canSaveProfile && styles.buttonDisabled]}
-                disabled={!canSaveProfile}
-                onPress={() => profileMutation.mutate({ name: name.trim(), phone: phone.trim() })}
-              >
-                {profileMutation.isPending ? <ActivityIndicator color="#FFFFFF" size="small" /> : <Text style={styles.primaryButtonText}>Save</Text>}
-              </Pressable>
-            </View>
+      <BottomSheetModalWrapper
+        visible={isProfileVisible}
+        onRequestClose={() => setIsProfileVisible(false)}
+        snapPoints={["70%", "50%"]}
+      >
+        <View style={styles.modalCard}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Edit Profile</Text>
+            <Pressable style={styles.modalCloseButton} onPress={() => setIsProfileVisible(false)}>
+              <Text style={styles.modalCloseText}>X</Text>
+            </Pressable>
+          </View>
+          <Text style={styles.modalMeta}>Keep owner/caretaker contact details updated for property operations.</Text>
+          <TextInput style={styles.input} value={name} onChangeText={setName} placeholder="Full name" placeholderTextColor={colors.textMuted} />
+          <TextInput style={styles.input} value={phone} onChangeText={setPhone} placeholder="Mobile number" placeholderTextColor={colors.textMuted} keyboardType="phone-pad" />
+          <View style={styles.modalActions}>
+            <Pressable style={styles.secondaryButton} onPress={() => setIsProfileVisible(false)}>
+              <Text style={styles.secondaryButtonText}>Cancel</Text>
+            </Pressable>
+            <Pressable
+              style={[styles.primaryButton, !canSaveProfile && styles.buttonDisabled]}
+              disabled={!canSaveProfile}
+              onPress={() => profileMutation.mutate({ name: name.trim(), phone: phone.trim() })}
+            >
+              {profileMutation.isPending ? <ActivityIndicator color="#FFFFFF" size="small" /> : <Text style={styles.primaryButtonText}>Save</Text>}
+            </Pressable>
           </View>
         </View>
-      </Modal>
+      </BottomSheetModalWrapper>
 
-      <Modal visible={isPasswordVisible} transparent animationType="slide" onRequestClose={() => setIsPasswordVisible(false)}>
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Change Password</Text>
-              <Pressable style={styles.modalCloseButton} onPress={() => setIsPasswordVisible(false)}>
-                <Text style={styles.modalCloseText}>X</Text>
-              </Pressable>
-            </View>
-            <Text style={styles.modalMeta}>For security, confirm your current password before setting a new one.</Text>
-            <TextInput
-              style={styles.input}
-              value={currentPassword}
-              onChangeText={setCurrentPassword}
-              placeholder="Current password"
-              placeholderTextColor={colors.textMuted}
-              secureTextEntry
-            />
-            <TextInput
-              style={styles.input}
-              value={newPassword}
-              onChangeText={setNewPassword}
-              placeholder="New password"
-              placeholderTextColor={colors.textMuted}
-              secureTextEntry
-            />
-            <View style={styles.modalActions}>
-              <Pressable style={styles.secondaryButton} onPress={() => setIsPasswordVisible(false)}>
-                <Text style={styles.secondaryButtonText}>Cancel</Text>
-              </Pressable>
-              <Pressable
-                style={[styles.primaryButton, !canChangePassword && styles.buttonDisabled]}
-                disabled={!canChangePassword}
-                onPress={() => passwordMutation.mutate({ currentPassword, newPassword })}
-              >
-                {passwordMutation.isPending ? <ActivityIndicator color="#FFFFFF" size="small" /> : <Text style={styles.primaryButtonText}>Update</Text>}
-              </Pressable>
-            </View>
+      <BottomSheetModalWrapper
+        visible={isPasswordVisible}
+        onRequestClose={() => setIsPasswordVisible(false)}
+        snapPoints={["70%", "50%"]}
+      >
+        <View style={styles.modalCard}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Change Password</Text>
+            <Pressable style={styles.modalCloseButton} onPress={() => setIsPasswordVisible(false)}>
+              <Text style={styles.modalCloseText}>X</Text>
+            </Pressable>
+          </View>
+          <Text style={styles.modalMeta}>For security, confirm your current password before setting a new one.</Text>
+          <TextInput
+            style={styles.input}
+            value={currentPassword}
+            onChangeText={setCurrentPassword}
+            placeholder="Current password"
+            placeholderTextColor={colors.textMuted}
+            secureTextEntry
+          />
+          <TextInput
+            style={styles.input}
+            value={newPassword}
+            onChangeText={setNewPassword}
+            placeholder="New password"
+            placeholderTextColor={colors.textMuted}
+            secureTextEntry
+          />
+          <View style={styles.modalActions}>
+            <Pressable style={styles.secondaryButton} onPress={() => setIsPasswordVisible(false)}>
+              <Text style={styles.secondaryButtonText}>Cancel</Text>
+            </Pressable>
+            <Pressable
+              style={[styles.primaryButton, !canChangePassword && styles.buttonDisabled]}
+              disabled={!canChangePassword}
+              onPress={() => passwordMutation.mutate({ currentPassword, newPassword })}
+            >
+              {passwordMutation.isPending ? <ActivityIndicator color="#FFFFFF" size="small" /> : <Text style={styles.primaryButtonText}>Update</Text>}
+            </Pressable>
           </View>
         </View>
-      </Modal>
+      </BottomSheetModalWrapper>
     </DrawerContentScrollView>
   );
 }

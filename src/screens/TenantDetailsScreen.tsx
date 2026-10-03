@@ -1,13 +1,13 @@
 import React, { useState } from "react";
 import {
   ActivityIndicator,
-  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from "react-native";
+import { BottomSheetModalWrapper } from "../components/BottomSheetModal";
 import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -90,6 +90,7 @@ export function TenantDetailsScreen({ route }: Props) {
   const [tenantRentDay, setTenantRentDay] = useState(String(tenant.rentDueDay ?? 1));
   const [tenantJoinedOn, setTenantJoinedOn] = useState(toDateInput(tenant.joinedOn));
   const [tenantSecurityDeposit, setTenantSecurityDeposit] = useState(String(tenant.securityDeposit ?? tenant.advanceAmount ?? 0));
+  const [tenantAdvance, setTenantAdvance] = useState(String(tenant.advanceAmount ?? tenant.securityDeposit ?? 0));
   const [tenantOpeningDue, setTenantOpeningDue] = useState(String(tenant.openingDueAmount ?? 0));
 
   // Remove tenant form state
@@ -202,6 +203,7 @@ export function TenantDetailsScreen({ route }: Props) {
     setTenantRentDay(String(tenant.rentDueDay ?? 1));
     setTenantJoinedOn(toDateInput(tenant.joinedOn));
     setTenantSecurityDeposit(String(tenant.securityDeposit ?? tenant.advanceAmount ?? 0));
+    setTenantAdvance(String(tenant.advanceAmount ?? tenant.securityDeposit ?? 0));
     setTenantOpeningDue(String(tenant.openingDueAmount ?? 0));
     setIsEditModalVisible(true);
   };
@@ -347,188 +349,206 @@ export function TenantDetailsScreen({ route }: Props) {
       </ScrollView>
 
       {/* Deposit Modal */}
-      <Modal visible={isDepositModalVisible} transparent animationType="slide" onRequestClose={() => setIsDepositModalVisible(false)}>
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>{paymentEditor ? "Edit Collection" : "Record Collection"}</Text>
-              <Pressable style={styles.modalCloseButton} onPress={() => setIsDepositModalVisible(false)}>
-                <Text style={styles.modalCloseText}>X</Text>
+      <BottomSheetModalWrapper
+        visible={isDepositModalVisible}
+        onRequestClose={() => setIsDepositModalVisible(false)}
+        snapPoints={["95%", "50%"]}
+      >
+        <View style={styles.modalCard}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>{paymentEditor ? "Edit Collection" : "Record Collection"}</Text>
+            <Pressable style={styles.modalCloseButton} onPress={() => setIsDepositModalVisible(false)}>
+              <Text style={styles.modalCloseText}>X</Text>
+            </Pressable>
+          </View>
+          <Text style={styles.modalMeta}>{tenant.fullName}</Text>
+          <FloatingLabelInput label="Amount" value={paymentAmount} onChangeText={setPaymentAmount} keyboardType="numeric" required />
+          <DateField value={paymentDate} onChange={setPaymentDate} placeholder="Paid on" label="Paid on" />
+          <View style={styles.modeRow}>
+            {paymentModes.map((mode) => (
+              <Pressable key={mode} style={[styles.modeChip, paymentMode === mode && styles.modeChipActive]} onPress={() => setPaymentMode(mode)}>
+                <Text style={[styles.modeChipText, paymentMode === mode && styles.modeChipTextActive]}>{mode.replace("_", " ")}</Text>
               </Pressable>
-            </View>
-            <Text style={styles.modalMeta}>{tenant.fullName}</Text>
-            <FloatingLabelInput label="Amount" value={paymentAmount} onChangeText={setPaymentAmount} keyboardType="numeric" required />
-            <DateField value={paymentDate} onChange={setPaymentDate} placeholder="Paid on" label="Paid on" />
-            <View style={styles.modeRow}>
-              {paymentModes.map((mode) => (
-                <Pressable key={mode} style={[styles.modeChip, paymentMode === mode && styles.modeChipActive]} onPress={() => setPaymentMode(mode)}>
-                  <Text style={[styles.modeChipText, paymentMode === mode && styles.modeChipTextActive]}>{mode.replace("_", " ")}</Text>
-                </Pressable>
-              ))}
-            </View>
-            <FloatingLabelInput label="Reference / notes" value={paymentUtr} onChangeText={setPaymentUtr} multiline hint="Add a UTR, reference, or any helpful note" />
-            {(collectPaymentMutation.isError || updatePaymentMutation.isError) ? <Text style={styles.error}>{getErrorMessage(collectPaymentMutation.error ?? updatePaymentMutation.error)}</Text> : null}
-            {!paymentEditor && (tenant.creditBalance ?? 0) > 0 && tenant.dueAmount > 0 ? (
-              <View style={styles.creditOptionRow}>
-                <Pressable onPress={() => setUseCreditAutomatically(!useCreditAutomatically)} style={styles.creditCheckbox}>
-                  <Text style={[styles.creditCheckboxText, useCreditAutomatically && styles.creditCheckboxTextActive]}>✓</Text>
-                </Pressable>
-                <Text style={styles.creditOptionLabel}>Use Available Credit Automatically (Credit: {money(tenant.creditBalance ?? 0)})</Text>
-              </View>
-            ) : null}
-            <View style={styles.modalActions}>
-              <Pressable
-                style={[styles.primaryButton, styles.fullWidthButton, !canSavePayment && styles.buttonDisabled]}
-                disabled={!canSavePayment}
-                onPress={() => {
-                  if (paymentEditor) {
-                    updatePaymentMutation.mutate({
-                      paymentId: paymentEditor.id,
-                      payload: { amount: Number(paymentAmount), paidOn: paymentDate.trim(), mode: paymentMode, notes: paymentUtr.trim() || undefined },
-                    });
-                  } else {
-                    collectPaymentMutation.mutate({
-                      tenantId: tenant.id,
-                      amount: Number(paymentAmount),
-                      paidOn: paymentDate.trim(),
-                      mode: paymentMode,
-                      notes: paymentUtr.trim() || undefined
-                    });
-                  }
-                }}
-              >
-                <Text style={styles.primaryButtonText}>{(collectPaymentMutation.isPending || updatePaymentMutation.isPending) ? "Saving..." : paymentEditor ? "Update" : "Record"}</Text>
+            ))}
+          </View>
+          <FloatingLabelInput label="Reference / notes" value={paymentUtr} onChangeText={setPaymentUtr} multiline hint="Add a UTR, reference, or any helpful note" />
+          {(collectPaymentMutation.isError || updatePaymentMutation.isError) ? <Text style={styles.error}>{getErrorMessage(collectPaymentMutation.error ?? updatePaymentMutation.error)}</Text> : null}
+          {!paymentEditor && (tenant.creditBalance ?? 0) > 0 && tenant.dueAmount > 0 ? (
+            <View style={styles.creditOptionRow}>
+              <Pressable onPress={() => setUseCreditAutomatically(!useCreditAutomatically)} style={styles.creditCheckbox}>
+                <Text style={[styles.creditCheckboxText, useCreditAutomatically && styles.creditCheckboxTextActive]}>✓</Text>
               </Pressable>
+              <Text style={styles.creditOptionLabel}>Use Available Credit Automatically (Credit: {money(tenant.creditBalance ?? 0)})</Text>
             </View>
+          ) : null}
+          <View style={styles.modalActions}>
+            <Pressable
+              style={[styles.primaryButton, styles.fullWidthButton, !canSavePayment && styles.buttonDisabled]}
+              disabled={!canSavePayment}
+              onPress={() => {
+                if (paymentEditor) {
+                  updatePaymentMutation.mutate({
+                    paymentId: paymentEditor.id,
+                    payload: { amount: Number(paymentAmount), paidOn: paymentDate.trim(), mode: paymentMode, notes: paymentUtr.trim() || undefined },
+                  });
+                } else {
+                  collectPaymentMutation.mutate({
+                    tenantId: tenant.id,
+                    amount: Number(paymentAmount),
+                    paidOn: paymentDate.trim(),
+                    mode: paymentMode,
+                    notes: paymentUtr.trim() || undefined
+                  });
+                }
+              }}
+            >
+              <Text style={styles.primaryButtonText}>{(collectPaymentMutation.isPending || updatePaymentMutation.isPending) ? "Saving..." : paymentEditor ? "Update" : "Record"}</Text>
+            </Pressable>
           </View>
         </View>
-      </Modal>
+      </BottomSheetModalWrapper>
 
       {/* History Modal */}
-      <Modal visible={isHistoryModalVisible} transparent animationType="slide" onRequestClose={() => setIsHistoryModalVisible(false)}>
-        <View style={styles.modalBackdrop}>
-          <View style={[styles.modalCard, styles.largeModal]}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Payment History</Text>
-              <Pressable style={styles.modalCloseButton} onPress={() => setIsHistoryModalVisible(false)}>
-                <Text style={styles.modalCloseText}>X</Text>
-              </Pressable>
-            </View>
-            <Text style={styles.modalMeta}>{tenant.fullName}</Text>
-            {paymentsQuery.isPending ? <ActivityIndicator color={colors.primary} /> : null}
-            <ScrollView style={styles.historyList}>
-              {(paymentsQuery.data ?? []).length === 0 ? <Text style={styles.emptyText}>No payments recorded yet.</Text> : null}
-              {(paymentsQuery.data ?? []).map((payment) => (
-                <View key={payment.id} style={styles.historyRow}>
-                  <View style={styles.flexOne}>
-                    <Text style={styles.historyMonth}>{money(payment.amount)}</Text>
-                    <Text style={styles.historyDate}>Paid on {formatDate(payment.paidOn)} • {payment.mode.replace("_", " ")}</Text>
-                    {payment.utr || payment.notes ? <Text style={styles.historyRef}>{payment.notes ?? payment.utr}</Text> : null}
-                  </View>
-                  <View style={styles.historyRight}>
-                    <Text style={styles.historyAmount}>{money(payment.amount)}</Text>
-                    <Pressable style={styles.historyEdit} onPress={() => openPaymentEditor(payment)}>
-                      <Text style={styles.historyEditText}>Edit</Text>
-                    </Pressable>
-                  </View>
-                </View>
-              ))}
-            </ScrollView>
+      <BottomSheetModalWrapper
+        visible={isHistoryModalVisible}
+        onRequestClose={() => setIsHistoryModalVisible(false)}
+        snapPoints={["95%", "60%", "40%"]}
+      >
+        <View style={[styles.modalCard, styles.largeModal]}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Payment History</Text>
+            <Pressable style={styles.modalCloseButton} onPress={() => setIsHistoryModalVisible(false)}>
+              <Text style={styles.modalCloseText}>X</Text>
+            </Pressable>
           </View>
+          <Text style={styles.modalMeta}>{tenant.fullName}</Text>
+          {paymentsQuery.isPending ? (
+            <ActivityIndicator color={colors.primary} />
+          ) : (
+            <>
+              <ScrollView style={styles.historyList}>
+                {(paymentsQuery.data ?? []).length === 0 ? <Text style={styles.emptyText}>No payments recorded yet.</Text> : null}
+                {(paymentsQuery.data ?? []).map((payment) => (
+                  <View key={payment.id} style={styles.historyRow}>
+                    <View style={styles.flexOne}>
+                      <Text style={styles.historyMonth}>{money(payment.amount)}</Text>
+                      <Text style={styles.historyDate}>Paid on {formatDate(payment.paidOn)} • {payment.mode.replace("_", " ")}</Text>
+                      {payment.utr || payment.notes ? <Text style={styles.historyRef}>{payment.notes ?? payment.utr}</Text> : null}
+                    </View>
+                    <View style={styles.historyRight}>
+                      <Text style={styles.historyAmount}>{money(payment.amount)}</Text>
+                      <Pressable style={styles.historyEdit} onPress={() => openPaymentEditor(payment)}>
+                        <Text style={styles.historyEditText}>Edit</Text>
+                      </Pressable>
+                    </View>
+                  </View>
+                ))}
+              </ScrollView>
+            </>
+          )}
         </View>
-      </Modal>
+      </BottomSheetModalWrapper>
 
       {/* Edit Modal */}
-      <Modal visible={isEditModalVisible} transparent animationType="slide" onRequestClose={() => setIsEditModalVisible(false)}>
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Edit Tenant</Text>
-              <Pressable style={styles.modalCloseButton} onPress={() => setIsEditModalVisible(false)}>
-                <Text style={styles.modalCloseText}>X</Text>
-              </Pressable>
-            </View>
-            <Text style={styles.modalMeta}>Update contact, rent, and deposit details. Changes are saved to this tenant only.</Text>
-            <FloatingLabelInput label="Tenant name" value={tenantName} onChangeText={setTenantName} required />
-            <FloatingLabelInput label="Residential address" value={tenantAddress} onChangeText={setTenantAddress} multiline required />
-            <FloatingLabelInput label="Mobile number" value={tenantPhone} onChangeText={setTenantPhone} keyboardType="phone-pad" required />
-            <FloatingLabelInput label="Monthly rent" value={tenantRent} onChangeText={setTenantRent} keyboardType="numeric" required />
-            <FloatingLabelInput label="Rent due day" value={tenantRentDay} onChangeText={setTenantRentDay} keyboardType="numeric" hint="1–31" required />
-            <DateField value={tenantJoinedOn} onChange={setTenantJoinedOn} placeholder="Joined on" label="Joined on" />
-            <FloatingLabelInput label="Advance amount" value={tenantAdvance} onChangeText={setTenantAdvance} keyboardType="numeric" />
-            <FloatingLabelInput label="Opening due amount" value={tenantOpeningDue} onChangeText={setTenantOpeningDue} keyboardType="numeric" />
-            {updateTenantMutation.isError ? <Text style={styles.error}>{getErrorMessage(updateTenantMutation.error)}</Text> : null}
-            <View style={styles.modalActions}>
-              <Pressable style={styles.secondaryButton} onPress={() => setIsEditModalVisible(false)}>
-                <Text style={styles.secondaryButtonText}>Cancel</Text>
-              </Pressable>
-              <Pressable
-                style={[styles.primaryButton, !canSaveTenant && styles.buttonDisabled]}
-                disabled={!canSaveTenant}
-                onPress={() => {
-                  updateTenantMutation.mutate({
-                    tenantId: tenant.id,
-                    payload: {
-                      fullName: tenantName.trim(),
-                      fullAddress: tenantAddress.trim(),
-                      phone: tenantPhone.trim(),
-                      monthlyRent: Number(tenantRent),
-                      rentDueDay: Number(tenantRentDay),
-                      joinedOn: tenantJoinedOn.trim(),
-                      securityDeposit: Number(tenantSecurityDeposit || 0),
-                      openingDueAmount: Number(tenantOpeningDue || 0),
-                    },
-                  });
-                }}
-              >
-                <Text style={styles.primaryButtonText}>{updateTenantMutation.isPending ? "Saving..." : "Save"}</Text>
-              </Pressable>
-            </View>
+      <BottomSheetModalWrapper
+        visible={isEditModalVisible}
+        onRequestClose={() => setIsEditModalVisible(false)}
+        snapPoints={["95%", "70%"]}
+      >
+        <View style={styles.modalCard}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Edit Tenant</Text>
+            <Pressable style={styles.modalCloseButton} onPress={() => setIsEditModalVisible(false)}>
+              <Text style={styles.modalCloseText}>X</Text>
+            </Pressable>
+          </View>
+          <Text style={styles.modalMeta}>Update contact, rent, and deposit details. Changes are saved to this tenant only.</Text>
+          <FloatingLabelInput label="Tenant name" value={tenantName} onChangeText={setTenantName} required />
+          <FloatingLabelInput label="Residential address" value={tenantAddress} onChangeText={setTenantAddress} multiline required />
+          <FloatingLabelInput label="Mobile number" value={tenantPhone} onChangeText={setTenantPhone} keyboardType="phone-pad" required />
+          <FloatingLabelInput label="Monthly rent" value={tenantRent} onChangeText={setTenantRent} keyboardType="numeric" required />
+          <FloatingLabelInput label="Rent due day" value={tenantRentDay} onChangeText={setTenantRentDay} keyboardType="numeric" hint="1–31" required />
+          <DateField value={tenantJoinedOn} onChange={setTenantJoinedOn} placeholder="Joined on" label="Joined on" />
+          <FloatingLabelInput label="Advance amount" value={tenantAdvance} onChangeText={setTenantAdvance} keyboardType="numeric" />
+          <FloatingLabelInput label="Opening due amount" value={tenantOpeningDue} onChangeText={setTenantOpeningDue} keyboardType="numeric" />
+          {updateTenantMutation.isError ? <Text style={styles.error}>{getErrorMessage(updateTenantMutation.error)}</Text> : null}
+          <View style={styles.modalActions}>
+            <Pressable style={styles.secondaryButton} onPress={() => setIsEditModalVisible(false)}>
+              <Text style={styles.secondaryButtonText}>Cancel</Text>
+            </Pressable>
+            <Pressable
+              style={[styles.primaryButton, !canSaveTenant && styles.buttonDisabled]}
+              disabled={!canSaveTenant}
+              onPress={() => {
+                updateTenantMutation.mutate({
+                  tenantId: tenant.id,
+                  payload: {
+                    fullName: tenantName.trim(),
+                    fullAddress: tenantAddress.trim(),
+                    phone: tenantPhone.trim(),
+                    monthlyRent: Number(tenantRent),
+                    rentDueDay: Number(tenantRentDay),
+                    joinedOn: tenantJoinedOn.trim(),
+                    securityDeposit: Number(tenantSecurityDeposit || 0),
+                    advanceAmount: Number(tenantAdvance || 0),
+                    openingDueAmount: Number(tenantOpeningDue || 0),
+                  },
+                });
+              }}
+            >
+              <Text style={styles.primaryButtonText}>{updateTenantMutation.isPending ? "Saving..." : "Save"}</Text>
+            </Pressable>
           </View>
         </View>
-      </Modal>
+      </BottomSheetModalWrapper>
 
       {/* Remove Modal */}
-      <Modal visible={isRemoveModalVisible} transparent animationType="slide" onRequestClose={() => setIsRemoveModalVisible(false)}>
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Remove Tenant</Text>
-              <Pressable style={styles.modalCloseButton} onPress={() => setIsRemoveModalVisible(false)}>
-                <Text style={styles.modalCloseText}>X</Text>
-              </Pressable>
-            </View>
-            <Text style={styles.modalMeta}>{tenant.fullName}</Text>
-            {(tenant.creditBalance ?? 0) > 0 ? (
-              <View style={styles.refundInfo}>
-                <Text style={styles.refundLabel}>Credit Balance to Refund:</Text>
-                <Text style={styles.refundAmount}>+ {money(tenant.creditBalance ?? 0)}</Text>
-              </View>
-            ) : null}
-            <Pressable style={styles.settlementPreviewButton} onPress={fetchSettlement}>
-              <Text style={styles.settlementPreviewText}>Preview Settlement</Text>
+      <BottomSheetModalWrapper
+        visible={isRemoveModalVisible}
+        onRequestClose={() => setIsRemoveModalVisible(false)}
+        snapPoints={["95%", "60%"]}
+      >
+        <View style={styles.modalCard}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Remove Tenant</Text>
+            <Pressable style={styles.modalCloseButton} onPress={() => setIsRemoveModalVisible(false)}>
+              <Text style={styles.modalCloseText}>X</Text>
             </Pressable>
-            <FloatingLabelInput label="Reason for removal" value={removeReason} onChangeText={setRemoveReason} required />
-            <DateField value={vacatedOn} onChange={setVacatedOn} placeholder="Vacated on" label="Vacated on" />
-            {removeTenantMutation.isError ? <Text style={styles.error}>{getErrorMessage(removeTenantMutation.error)}</Text> : null}
-            <View style={styles.modalActions}>
-              <Pressable style={styles.secondaryButton} onPress={() => setIsRemoveModalVisible(false)}>
-                <Text style={styles.secondaryButtonText}>Cancel</Text>
-              </Pressable>
-              <Pressable
-                style={[styles.dangerButton, !canRemoveTenant && styles.buttonDisabled]}
-                disabled={!canRemoveTenant}
-                onPress={() => { removeTenantMutation.mutate({ tenantId: tenant.id, reason: removeReason.trim(), vacatedOnDate: vacatedOn.trim() || undefined }); }}
-              >
-                <Text style={styles.dangerButtonText}>{removeTenantMutation.isPending ? "Removing..." : "Remove Tenant"}</Text>
-              </Pressable>
+          </View>
+          <Text style={styles.modalMeta}>{tenant.fullName}</Text>
+          {(tenant.creditBalance ?? 0) > 0 ? (
+            <View style={styles.refundInfo}>
+              <Text style={styles.refundLabel}>Credit Balance to Refund:</Text>
+              <Text style={styles.refundAmount}>+ {money(tenant.creditBalance ?? 0)}</Text>
             </View>
+          ) : null}
+          <Pressable style={styles.settlementPreviewButton} onPress={fetchSettlement}>
+            <Text style={styles.settlementPreviewText}>Preview Settlement</Text>
+          </Pressable>
+          <FloatingLabelInput label="Reason for removal" value={removeReason} onChangeText={setRemoveReason} required />
+          <DateField value={vacatedOn} onChange={setVacatedOn} placeholder="Vacated on" label="Vacated on" />
+          {removeTenantMutation.isError ? <Text style={styles.error}>{getErrorMessage(removeTenantMutation.error)}</Text> : null}
+          <View style={styles.modalActions}>
+            <Pressable style={styles.secondaryButton} onPress={() => setIsRemoveModalVisible(false)}>
+              <Text style={styles.secondaryButtonText}>Cancel</Text>
+            </Pressable>
+            <Pressable
+              style={[styles.dangerButton, !canRemoveTenant && styles.buttonDisabled]}
+              disabled={!canRemoveTenant}
+              onPress={() => { removeTenantMutation.mutate({ tenantId: tenant.id, reason: removeReason.trim(), vacatedOnDate: vacatedOn.trim() || undefined }); }}
+            >
+              <Text style={styles.dangerButtonText}>{removeTenantMutation.isPending ? "Removing..." : "Remove Tenant"}</Text>
+            </Pressable>
           </View>
         </View>
-      </Modal>
+      </BottomSheetModalWrapper>
 
       {/* Settlement Preview Modal */}
-      <Modal visible={isSettlementModalVisible} transparent animationType="slide" onRequestClose={() => setIsSettlementModalVisible(false)}>
+      <BottomSheetModalWrapper
+        visible={isSettlementModalVisible}
+        onRequestClose={() => setIsSettlementModalVisible(false)}
+        snapPoints={["95%", "70%"]}
+      >
         <View style={styles.modalBackdrop}>
           <View style={[styles.modalCard, styles.largeModal]}>
             <View style={styles.modalHeader}>
@@ -539,47 +559,49 @@ export function TenantDetailsScreen({ route }: Props) {
             </View>
             <Text style={styles.modalMeta}>{tenant.fullName}</Text>
             {settlementData ? (
-              <View style={styles.settlementContent}>
-                <View style={styles.settlementRow}>
-                  <Text style={styles.settlementLabel}>Outstanding Rent</Text>
-                  <Text style={styles.settlementValue}>{money(settlementData.outstandingRent)}</Text>
-                </View>
-                <View style={styles.settlementRow}>
-                  <Text style={styles.settlementLabel}>Deposit Held</Text>
-                  <Text style={styles.settlementValue}>{money(settlementData.depositHeld)}</Text>
-                </View>
-                <View style={styles.settlementRow}>
-                  <Text style={styles.settlementLabel}>Credit Balance</Text>
-                  <Text style={[styles.settlementValue, styles.credit]}>+ {money(settlementData.creditBalance)}</Text>
-                </View>
-                <View style={styles.settlementRow}>
-                  <Text style={styles.settlementLabel}>Maintenance Charges</Text>
-                  <Text style={styles.settlementValue}>{money(settlementData.maintenanceCharges)}</Text>
-                </View>
-                <View style={styles.settlementRow}>
-                  <Text style={styles.settlementLabel}>Damage Charges</Text>
-                  <Text style={styles.settlementValue}>{money(settlementData.damageCharges)}</Text>
-                </View>
-                <View style={[styles.settlementRow, styles.settlementTotal]}>
-                  <Text style={styles.settlementLabel}>Refund Amount</Text>
-                  <Text style={[styles.settlementValue, settlementData.refundAmount >= 0 ? styles.success : styles.danger]}>
-                    {money(settlementData.refundAmount)}
-                  </Text>
-                </View>
-                {settlementData.settlementDetails && settlementData.settlementDetails.length > 0 ? (
-                  <View style={styles.settlementDetails}>
-                    <Text style={styles.settlementDetailTitle}>Breakdown:</Text>
-                    {settlementData.settlementDetails.map((detail, idx) => (
-                      <View key={idx} style={styles.settlementDetailRow}>
-                        <Text style={styles.settlementDetailLabel}>{detail.description}</Text>
-                        <Text style={[styles.settlementDetailValue, detail.amount >= 0 ? styles.success : styles.danger]}>
-                          {money(detail.amount)}
-                        </Text>
-                      </View>
-                    ))}
+              <>
+                <View style={styles.settlementContent}>
+                  <View style={styles.settlementRow}>
+                    <Text style={styles.settlementLabel}>Outstanding Rent</Text>
+                    <Text style={styles.settlementValue}>{money(settlementData.outstandingRent)}</Text>
                   </View>
-                ) : null}
-              </View>
+                  <View style={styles.settlementRow}>
+                    <Text style={styles.settlementLabel}>Deposit Held</Text>
+                    <Text style={styles.settlementValue}>{money(settlementData.depositHeld)}</Text>
+                  </View>
+                  <View style={styles.settlementRow}>
+                    <Text style={styles.settlementLabel}>Credit Balance</Text>
+                    <Text style={[styles.settlementValue, styles.credit]}>+ {money(settlementData.creditBalance)}</Text>
+                  </View>
+                  <View style={styles.settlementRow}>
+                    <Text style={styles.settlementLabel}>Maintenance Charges</Text>
+                    <Text style={styles.settlementValue}>{money(settlementData.maintenanceCharges)}</Text>
+                  </View>
+                  <View style={styles.settlementRow}>
+                    <Text style={styles.settlementLabel}>Damage Charges</Text>
+                    <Text style={styles.settlementValue}>{money(settlementData.damageCharges)}</Text>
+                  </View>
+                  <View style={[styles.settlementRow, styles.settlementTotal]}>
+                    <Text style={styles.settlementLabel}>Refund Amount</Text>
+                    <Text style={[styles.settlementValue, settlementData.refundAmount >= 0 ? styles.success : styles.danger]}>
+                      {money(settlementData.refundAmount)}
+                    </Text>
+                  </View>
+                  {settlementData.settlementDetails && settlementData.settlementDetails.length > 0 ? (
+                    <View style={styles.settlementDetails}>
+                      <Text style={styles.settlementDetailTitle}>Breakdown:</Text>
+                      {settlementData.settlementDetails.map((detail, idx) => (
+                        <View key={idx} style={styles.settlementDetailRow}>
+                          <Text style={styles.settlementDetailLabel}>{detail.description}</Text>
+                          <Text style={[styles.settlementDetailValue, detail.amount >= 0 ? styles.success : styles.danger]}>
+                            {money(detail.amount)}
+                          </Text>
+                        </View>
+                      ))}
+                    </View>
+                  ) : null}
+                </View>
+              </>
             ) : (
               <ActivityIndicator color={colors.primary} />
             )}
@@ -590,7 +612,7 @@ export function TenantDetailsScreen({ route }: Props) {
             </View>
           </View>
         </View>
-      </Modal>
+      </BottomSheetModalWrapper>
     </Screen>
   );
 }

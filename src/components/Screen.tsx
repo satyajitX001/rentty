@@ -1,9 +1,10 @@
 import React, { ReactNode, useEffect, useRef } from "react";
-import { Animated, Easing, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Animated, Easing, StyleSheet, Text, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { AppTheme, useAppTheme, useThemedStyles } from "../theme";
 import { Edge, SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { moderateScale, scale, verticalScale } from "../utils/scale";
+import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 
 type Props = {
   title: string;
@@ -79,12 +80,14 @@ export function Screen({
   return (
     <SafeAreaView style={styles.safe} edges={safeAreaEdges}>
       {scrollable ? (
-        <ScrollView
+        <KeyboardAwareScrollView
           contentContainerStyle={[styles.content, { paddingBottom: scrollBottomPadding }]}
           showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          extraScrollHeight={verticalScale(20)}
         >
           {content}
-        </ScrollView>
+        </KeyboardAwareScrollView>
       ) : (
         <View style={[styles.content, styles.contentStatic, { paddingBottom: bottomPadding }]}>
           {content}

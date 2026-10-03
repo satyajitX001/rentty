@@ -3,7 +3,6 @@ import {
   ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
-  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -12,6 +11,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { BottomSheetModalWrapper } from "../components/BottomSheetModal";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { DateField } from "../components/DateField";
@@ -316,130 +316,130 @@ export function MaintenanceScreen() {
         );
       })}
 
-      <Modal visible={isCreateVisible} transparent animationType="slide" onRequestClose={closeCreateModal}>
-        <KeyboardAvoidingView
-          style={styles.modalBackdrop}
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
-        >
-          <View style={[styles.modalCard, { paddingBottom: Math.max(insets.bottom, 12) }]}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Log Maintenance</Text>
-              <Pressable style={styles.modalCloseButton} onPress={closeCreateModal}>
-                <Text style={styles.modalCloseText}>X</Text>
-              </Pressable>
-            </View>
-
-            <ScrollView
-              style={styles.modalScroll}
-              contentContainerStyle={styles.modalScrollContent}
-              keyboardShouldPersistTaps="handled"
-              showsVerticalScrollIndicator={false}
-            >
-              <Text style={styles.modalMeta}>Attach every repair to a property so reports show rent collected vs maintenance spend.</Text>
-
-              <Text style={styles.fieldLabel}>
-                Property <Text style={styles.requiredMark}>*</Text>
-              </Text>
-              {properties.length === 0 ? (
-                <Text style={styles.modalMeta}>No property found. Add one from Dashboard, then reopen this form.</Text>
-              ) : (
-                <>
-                  <Pressable
-                    style={styles.selectField}
-                    onPress={() => setIsPropertyPickerOpen((open) => !open)}
-                  >
-                    <Text style={selectedProperty ? styles.selectValue : styles.selectPlaceholder}>
-                      {selectedProperty?.name ?? "Select property"}
-                    </Text>
-                    <Text style={styles.selectChevron}>{isPropertyPickerOpen ? "▲" : "▼"}</Text>
-                  </Pressable>
-                  {isPropertyPickerOpen ? (
-                    <View style={styles.propertyPickerList}>
-                      {properties.map((property) => {
-                        const selected = selectedPropertyId === property.id;
-                        return (
-                          <Pressable
-                            key={property.id}
-                            style={[styles.propertyOption, selected && styles.propertyOptionActive]}
-                            onPress={() => {
-                              setSelectedPropertyId(property.id);
-                              setIsPropertyPickerOpen(false);
-                            }}
-                          >
-                            <View style={styles.propertyOptionTextWrap}>
-                              <Text style={[styles.propertyOptionTitle, selected && styles.propertyOptionTitleActive]}>{property.name}</Text>
-                              <Text style={[styles.propertyOptionMeta, selected && styles.propertyOptionMetaActive]}>{property.address}</Text>
-                            </View>
-                            {selected ? <Text style={styles.selectedMark}>Selected</Text> : null}
-                          </Pressable>
-                        );
-                      })}
-                    </View>
-                  ) : null}
-                </>
-              )}
-
-              <Text style={styles.fieldLabel}>
-                Work title <Text style={styles.requiredMark}>*</Text>
-              </Text>
-              <TextInput style={styles.input} value={title} onChangeText={setTitle} placeholder="e.g. Bathroom plumbing" placeholderTextColor={colors.textMuted} />
-              <Text style={styles.fieldLabel}>
-                Room / area <Text style={styles.requiredMark}>*</Text>
-              </Text>
-              <TextInput style={styles.input} value={roomNumber} onChangeText={setRoomNumber} placeholder="e.g. First floor, Room 204" placeholderTextColor={colors.textMuted} />
-              <Text style={styles.fieldLabel}>
-                Maintenance date <Text style={styles.requiredMark}>*</Text>
-              </Text>
-              <DateField value={servicedOn} onChange={setServicedOn} placeholder="Pick maintenance date" label="Service date" />
-              <Text style={styles.fieldLabel}>Notes (optional)</Text>
-              <TextInput style={[styles.input, styles.textArea]} value={description} onChangeText={setDescription} placeholder="Notes / issue details (optional)" placeholderTextColor={colors.textMuted} multiline />
-              <TextInput style={styles.input} value={serviceProvider} onChangeText={setServiceProvider} placeholder="Service provider (optional)" placeholderTextColor={colors.textMuted} />
-              <Text style={styles.fieldLabel}>
-                Amount <Text style={styles.requiredMark}>*</Text>
-              </Text>
-              <TextInput style={styles.input} value={estimatedCost} onChangeText={setEstimatedCost} placeholder="Amount spent / estimate" placeholderTextColor={colors.textMuted} keyboardType="numeric" />
-
-              <Text style={styles.fieldLabel}>Priority</Text>
-              <View style={styles.priorityRow}>
-                {priorities.map((item) => (
-                  <Pressable key={item} style={[styles.priorityChip, priority === item && styles.priorityChipActive]} onPress={() => setPriority(item)}>
-                    <Text style={[styles.priorityText, priority === item && styles.priorityTextActive]}>{item.toUpperCase()}</Text>
-                  </Pressable>
-                ))}
-              </View>
-
-              {selectedProperty ? <Text style={styles.modalMeta}>Linked property: {selectedProperty.name}</Text> : null}
-              {!canCreate && !createMutation.isPending && saveHint ? (
-                <Text style={styles.helperText}>{saveHint}</Text>
-              ) : null}
-            </ScrollView>
-
-            <View style={styles.modalActions}>
-              <Pressable style={styles.secondaryButton} onPress={closeCreateModal}>
-                <Text style={styles.secondaryButtonText}>Cancel</Text>
-              </Pressable>
-              <Pressable
-                style={[styles.primaryButton, !canCreate && styles.buttonDisabled]}
-                disabled={!canCreate}
-                onPress={() => {
-                  createMutation.mutate({
-                    propertyId: selectedPropertyId,
-                    roomNumber: roomNumber.trim(),
-                    title: title.trim(),
-                    requestedOn: servicedOn.trim(),
-                    description: description.trim() || undefined,
-                    priority,
-                    serviceProvider: serviceProvider.trim() || undefined,
-                    estimatedCost: parsedCost,
-                  });
-                }}
-              >
-                <Text style={styles.primaryButtonText}>{createMutation.isPending ? "Saving..." : "Save"}</Text>
-              </Pressable>
-            </View>
+      <BottomSheetModalWrapper
+        visible={isCreateVisible}
+        onRequestClose={closeCreateModal}
+        snapPoints={["95%", "70%"]}
+        keyboardBehavior="extend"
+      >
+        <View style={[styles.modalCard, { paddingBottom: Math.max(insets.bottom, 12) }]}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Log Maintenance</Text>
+            <Pressable style={styles.modalCloseButton} onPress={closeCreateModal}>
+              <Text style={styles.modalCloseText}>X</Text>
+            </Pressable>
           </View>
-        </KeyboardAvoidingView>
-      </Modal>
+
+          <ScrollView
+            style={styles.modalScroll}
+            contentContainerStyle={styles.modalScrollContent}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            <Text style={styles.modalMeta}>Attach every repair to a property so reports show rent collected vs maintenance spend.</Text>
+
+            <Text style={styles.fieldLabel}>
+              Property <Text style={styles.requiredMark}>*</Text>
+            </Text>
+            {properties.length === 0 ? (
+              <Text style={styles.modalMeta}>No property found. Add one from Dashboard, then reopen this form.</Text>
+            ) : (
+              <>
+                <Pressable
+                  style={styles.selectField}
+                  onPress={() => setIsPropertyPickerOpen((open) => !open)}
+                >
+                  <Text style={selectedProperty ? styles.selectValue : styles.selectPlaceholder}>
+                    {selectedProperty?.name ?? "Select property"}
+                  </Text>
+                  <Text style={styles.selectChevron}>{isPropertyPickerOpen ? "▲" : "▼"}</Text>
+                </Pressable>
+                {isPropertyPickerOpen ? (
+                  <View style={styles.propertyPickerList}>
+                    {properties.map((property) => {
+                      const selected = selectedPropertyId === property.id;
+                      return (
+                        <Pressable
+                          key={property.id}
+                          style={[styles.propertyOption, selected && styles.propertyOptionActive]}
+                          onPress={() => {
+                            setSelectedPropertyId(property.id);
+                            setIsPropertyPickerOpen(false);
+                          }}
+                        >
+                          <View style={styles.propertyOptionTextWrap}>
+                            <Text style={[styles.propertyOptionTitle, selected && styles.propertyOptionTitleActive]}>{property.name}</Text>
+                            <Text style={[styles.propertyOptionMeta, selected && styles.propertyOptionMetaActive]}>{property.address}</Text>
+                          </View>
+                          {selected ? <Text style={styles.selectedMark}>Selected</Text> : null}
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                ) : null}
+              </>
+            )}
+
+            <Text style={styles.fieldLabel}>
+              Work title <Text style={styles.requiredMark}>*</Text>
+            </Text>
+            <TextInput style={styles.input} value={title} onChangeText={setTitle} placeholder="e.g. Bathroom plumbing" placeholderTextColor={colors.textMuted} />
+            <Text style={styles.fieldLabel}>
+              Room / area <Text style={styles.requiredMark}>*</Text>
+            </Text>
+            <TextInput style={styles.input} value={roomNumber} onChangeText={setRoomNumber} placeholder="e.g. First floor, Room 204" placeholderTextColor={colors.textMuted} />
+            <Text style={styles.fieldLabel}>
+              Maintenance date <Text style={styles.requiredMark}>*</Text>
+            </Text>
+            <DateField value={servicedOn} onChange={setServicedOn} placeholder="Pick maintenance date" label="Service date" />
+            <Text style={styles.fieldLabel}>Notes (optional)</Text>
+            <TextInput style={[styles.input, styles.textArea]} value={description} onChangeText={setDescription} placeholder="Notes / issue details (optional)" placeholderTextColor={colors.textMuted} multiline />
+            <TextInput style={styles.input} value={serviceProvider} onChangeText={setServiceProvider} placeholder="Service provider (optional)" placeholderTextColor={colors.textMuted} />
+            <Text style={styles.fieldLabel}>
+              Amount <Text style={styles.requiredMark}>*</Text>
+            </Text>
+            <TextInput style={styles.input} value={estimatedCost} onChangeText={setEstimatedCost} placeholder="Amount spent / estimate" placeholderTextColor={colors.textMuted} keyboardType="numeric" />
+
+            <Text style={styles.fieldLabel}>Priority</Text>
+            <View style={styles.priorityRow}>
+              {priorities.map((item) => (
+                <Pressable key={item} style={[styles.priorityChip, priority === item && styles.priorityChipActive]} onPress={() => setPriority(item)}>
+                  <Text style={[styles.priorityText, priority === item && styles.priorityTextActive]}>{item.toUpperCase()}</Text>
+                </Pressable>
+              ))}
+            </View>
+
+            {selectedProperty ? <Text style={styles.modalMeta}>Linked property: {selectedProperty.name}</Text> : null}
+            {!canCreate && !createMutation.isPending && saveHint ? (
+              <Text style={styles.helperText}>{saveHint}</Text>
+            ) : null}
+          </ScrollView>
+
+          <View style={styles.modalActions}>
+            <Pressable style={styles.secondaryButton} onPress={closeCreateModal}>
+              <Text style={styles.secondaryButtonText}>Cancel</Text>
+            </Pressable>
+            <Pressable
+              style={[styles.primaryButton, !canCreate && styles.buttonDisabled]}
+              disabled={!canCreate}
+              onPress={() => {
+                createMutation.mutate({
+                  propertyId: selectedPropertyId,
+                  roomNumber: roomNumber.trim(),
+                  title: title.trim(),
+                  requestedOn: servicedOn.trim(),
+                  description: description.trim() || undefined,
+                  priority,
+                  serviceProvider: serviceProvider.trim() || undefined,
+                  estimatedCost: parsedCost,
+                });
+              }}
+            >
+              <Text style={styles.primaryButtonText}>{createMutation.isPending ? "Saving..." : "Save"}</Text>
+            </Pressable>
+          </View>
+        </View>
+      </BottomSheetModalWrapper>
     </Screen>
   );
 }

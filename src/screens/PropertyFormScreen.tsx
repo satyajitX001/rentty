@@ -22,12 +22,12 @@ type ProrationMode = (typeof prorationModes)[number];
 
 const prorationLabels: Record<ProrationMode, string> = {
   full_month: "Full Month",
-  pro_rata_daily: "Pro-Rata (Daily)",
+  pro_rata_daily: "Daily Calculation",
   next_cycle: "Next Rent Cycle",
 };
 const prorationDescriptions: Record<ProrationMode, string> = {
   full_month: "Charge full month rent regardless of join date",
-  pro_rata_daily: "Calculate daily rate × days remaining in month",
+  pro_rata_daily: "Calculate daily rate × days based on due date",
   next_cycle: "Skip partial month, first charge on next due date",
 };
 

@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from "react";
-import { ActivityIndicator, DimensionValue, Linking, Modal, Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { ActivityIndicator, DimensionValue, Linking, Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { BottomSheetModalWrapper } from "../components/BottomSheetModal";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useMutation } from "@tanstack/react-query";
@@ -132,35 +133,37 @@ export function ReportsScreen() {
         )}
       </Pressable>
 
-      <Modal visible={isMonthPickerVisible} transparent animationType="slide" onRequestClose={() => setIsMonthPickerVisible(false)}>
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Choose Month</Text>
-              <Pressable style={styles.modalCloseButton} onPress={() => setIsMonthPickerVisible(false)}>
-                <Text style={styles.modalCloseText}>X</Text>
-              </Pressable>
-            </View>
-            <View style={styles.monthOptionGrid}>
-              {monthOptions.map((option) => {
-                const selected = option === monthKey;
-                return (
-                  <Pressable
-                    key={option}
-                    style={[styles.monthOption, selected && styles.monthOptionActive]}
-                    onPress={() => {
-                      setMonthKey(option);
-                      setIsMonthPickerVisible(false);
-                    }}
-                  >
-                    <Text style={[styles.monthOptionText, selected && styles.monthOptionTextActive]}>{monthLabel(option)}</Text>
-                  </Pressable>
-                );
-              })}
-            </View>
+      <BottomSheetModalWrapper
+        visible={isMonthPickerVisible}
+        onRequestClose={() => setIsMonthPickerVisible(false)}
+        snapPoints={["50%", "40%"]}
+      >
+        <View style={styles.modalCard}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Choose Month</Text>
+            <Pressable style={styles.modalCloseButton} onPress={() => setIsMonthPickerVisible(false)}>
+              <Text style={styles.modalCloseText}>X</Text>
+            </Pressable>
+          </View>
+          <View style={styles.monthOptionGrid}>
+            {monthOptions.map((option) => {
+              const selected = option === monthKey;
+              return (
+                <Pressable
+                  key={option}
+                  style={[styles.monthOption, selected && styles.monthOptionActive]}
+                  onPress={() => {
+                    setMonthKey(option);
+                    setIsMonthPickerVisible(false);
+                  }}
+                >
+                  <Text style={[styles.monthOptionText, selected && styles.monthOptionTextActive]}>{monthLabel(option)}</Text>
+                </Pressable>
+              );
+            })}
           </View>
         </View>
-      </Modal>
+      </BottomSheetModalWrapper>
     </Screen>
   );
 }

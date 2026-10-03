@@ -14,9 +14,34 @@ import { AppStackParamList } from "../navigation/AppStackNavigator";
 
 type Props = NativeStackScreenProps<AppStackParamList, "TenantForm">;
 
-function getErrorMessage(error: unknown) {
-  if (error instanceof Error) return error.message;
-  return "Unable to save tenant.";
+function getErrorMessage(error: unknown): string {
+  const msg = error instanceof Error ? error.message : String(error);
+
+  // Map common backend errors to user-friendly messages
+  if (msg.includes("Property is currently occupied")) {
+    return "This property already has an active tenant. Remove them first.";
+  }
+  if (msg.includes("joinedOn cannot be in the future")) {
+    return "Joining date cannot be in the future.";
+  }
+  if (msg.includes("Property not found")) {
+    return "Property not found. Please try again.";
+  }
+  if (msg.includes("Forbidden") || msg.includes("403")) {
+    return "You don't have permission to add tenants to this property.";
+  }
+  if (msg.includes("network") || msg.includes("Network")) {
+    return "Connection error. Please check your internet and try again.";
+  }
+  if (msg.includes("401") || msg.includes("Unauthorized")) {
+    return "Session expired. Please log in again.";
+  }
+  if (msg.includes("validation") || msg.includes("Validation")) {
+    return "Please check all required fields are filled correctly.";
+  }
+
+  // Generic fallback - don't show raw technical details
+  return "Something went wrong. Please try again.";
 }
 
 export function TenantFormScreen({ navigation, route }: Props) {
@@ -40,6 +65,7 @@ export function TenantFormScreen({ navigation, route }: Props) {
   const [tenantJoinedOn, setTenantJoinedOn] = useState("");
   const [tenantSecurityDeposit, setTenantSecurityDeposit] = useState("");
   const [tenantOpeningDue, setTenantOpeningDue] = useState("");
+  const [tenantNotes, setTenantNotes] = useState("");
 
   // Calculate proration preview
   const prorationPreview = useMemo(() => {
@@ -91,6 +117,7 @@ export function TenantFormScreen({ navigation, route }: Props) {
       joinedOn: tenantJoinedOn.trim(),
       securityDeposit: Number(tenantSecurityDeposit || 0),
       openingDueAmount: Number(tenantOpeningDue || 0),
+      remarks: tenantNotes.trim() || undefined,
     });
   };
 
@@ -223,6 +250,15 @@ export function TenantFormScreen({ navigation, route }: Props) {
               value={tenantOpeningDue}
               onChangeText={setTenantOpeningDue}
             />
+            <TextInput
+              style={[styles.input, styles.textArea]}
+              placeholder="Notes (optional)"
+              placeholderTextColor={colors.textMuted}
+              multiline
+              numberOfLines={3}
+              value={tenantNotes}
+              onChangeText={setTenantNotes}
+            />
           </InfoCard>
         </>
       }
@@ -335,5 +371,11 @@ const createStyles = ({ colors, fonts, radii, shadows }: AppTheme) => StyleSheet
     color: colors.warning,
     fontFamily: fonts.heading,
     fontSize: 12,
+  },
+  textArea: {
+    minHeight: 90,
+    textAlignVertical: "top",
+    paddingTop: 10,
+    paddingBottom: 10,
   },
 });

@@ -6,6 +6,7 @@ import { NavigationContainer } from "@react-navigation/native";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { StatusBar } from "expo-status-bar";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
 import { AppStackNavigator } from "./src/navigation/AppStackNavigator";
 import { AuthStackNavigator } from "./src/navigation/AuthStackNavigator";
 import { queryClient } from "./src/services/api/queryClient";
@@ -42,9 +43,11 @@ function AppShell() {
 export default function App() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <QueryClientProvider client={queryClient}>
-        <AuthProvider children={<AppShell />} />
-      </QueryClientProvider>
+      <BottomSheetModalProvider>
+        <QueryClientProvider client={queryClient}>
+          <AuthProvider children={<AppShell />} />
+        </QueryClientProvider>
+      </BottomSheetModalProvider>
     </GestureHandlerRootView>
   );
 }

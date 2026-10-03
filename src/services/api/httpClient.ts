@@ -12,6 +12,36 @@ import { clearSessionStorage, updateSessionTokens } from "../../store/sessionSto
 
 type HeaderRecord = Record<string, string>;
 
+function buildCurlCommand(config: InternalAxiosRequestConfig): string {
+  const baseUrl = config.baseURL ?? "";
+  const url = config.url ?? "";
+  const fullUrl = new URL(url, baseUrl).toString();
+  const method = (config.method ?? "GET").toUpperCase();
+
+  const headers = normalizeHeaders(config.headers);
+  const headerStrings = Object.entries(headers)
+    .map(([key, value]) => `-H '${key}: ${value}'`)
+    .join(" ");
+
+  let dataString = "";
+  if (config.data !== undefined && config.data !== null) {
+    const data = typeof config.data === "string" ? config.data : JSON.stringify(config.data);
+    dataString = ` -d '${data.replace(/'/g, "'\\''")}'`;
+  }
+
+  return `curl -X ${method} '${fullUrl}' ${headerStrings}${dataString}`;
+}
+
+function logCurl(config: InternalAxiosRequestConfig, response?: AxiosResponse): void {
+  const curl = buildCurlCommand(config);
+  const status = response?.status ? ` [${response.status}]` : "";
+  console.log(`📡 API ${config.method?.toUpperCase()} ${config.url}${status}`);
+  console.log(`🔧 ${curl}`);
+  if (response?.data) {
+    console.log(`📥 Response:`, typeof response.data === "string" ? response.data : JSON.stringify(response.data, null, 2));
+  }
+}
+
 type RetryRequestConfig = InternalAxiosRequestConfig & {
   _retry?: boolean;
 };
@@ -133,11 +163,21 @@ apiClient.interceptors.request.use((config) => {
 
   config.headers = headers as any;
 
+  // Log curl for request
+  if (__DEV__) {
+    logCurl(config);
+  }
+
   return config;
 });
 
 apiClient.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    if (__DEV__) {
+      logCurl(response.config, response);
+    }
+    return response;
+  },
   async (error: AxiosError) => {
     const status = error.response?.status ?? 0;
     const messageFromServer =
@@ -147,6 +187,10 @@ apiClient.interceptors.response.use(
 
     const baseMessage = messageFromServer ?? error.message ?? "Request failed";
     const originalRequest = error.config as RetryRequestConfig | undefined;
+
+    if (__DEV__ && originalRequest) {
+      logCurl(originalRequest, error.response);
+    }
 
     if (status === 401 && originalRequest && !originalRequest._retry && !isRefreshRequest(originalRequest.url)) {
       const currentRefresh = getRefreshToken();

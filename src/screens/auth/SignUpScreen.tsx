@@ -57,7 +57,7 @@ export function SignUpScreen() {
         <Text style={styles.label}>Full Name</Text>
         <TextInput
           style={styles.input}
-          placeholder="Satyajit Ray"
+          placeholder="Enter your name"
           placeholderTextColor={colors.textMuted}
           value={name}
           onChangeText={setName}
